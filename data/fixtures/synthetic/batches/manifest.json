@@ -1,0 +1,22 @@
+{
+  "synthetic": true,
+  "description": "Собственные синтетические примеры; не результаты DEV или модели.",
+  "fixtures": [
+    {
+      "file": "batch.create.json",
+      "schema": "EvaluationBatchCreate"
+    },
+    {
+      "file": "batch.completed-with-errors.json",
+      "schema": "EvaluationBatch"
+    },
+    {
+      "file": "submission.request.json",
+      "schema": "SubmissionExportRequest"
+    },
+    {
+      "file": "submission.response.json",
+      "schema": "SubmissionDocument"
+    }
+  ]
+}

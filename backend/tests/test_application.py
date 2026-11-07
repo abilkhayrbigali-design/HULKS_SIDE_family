@@ -33,12 +33,12 @@ def test_runtime_openapi_documents_contract_operations_and_examples(settings):
     runtime = create_app(settings).openapi()
     validate(runtime)
     assert set(runtime["paths"]) == set(CONTRACT["paths"])
-    manifest = json.loads((FIXTURES / "manifest.json").read_text())
     examples = {}
-    for example in manifest["fixtures"]:
-        examples.setdefault(example["schema"], []).append(
-            json.loads((FIXTURES / example["file"]).read_text())
-        )
+    for manifest_path in FIXTURES.rglob("manifest.json"):
+        for example in json.loads(manifest_path.read_text())["fixtures"]:
+            examples.setdefault(example["schema"], []).append(
+                json.loads((manifest_path.parent / example["file"]).read_text())
+            )
     for path, operations in CONTRACT["paths"].items():
         assert set(runtime["paths"][path]) == set(operations)
         for method, expected in operations.items():

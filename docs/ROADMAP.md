@@ -37,6 +37,17 @@
 
 Нельзя заменять работу над точностью дополнительными функциями. Точная официальная формула сравнения с Ground Truth неизвестна.
 
+### Пакетная обработка и подготовка сдачи — 2026-11-08
+
+Пользователь возобновил улучшения после сравнения конкурентов и поручил делегирование.
+Общий контракт и граница проверки: D-023 и API_CONTRACT.md. Новых живых AI-вызовов нет.
+Человеческая разметка остаётся работой команды; существующий пакет описан в
+[BENCHMARK_PREPARATION.md](BENCHMARK_PREPARATION.md).
+
+| ID | Приоритет | Ответственный | Задача и критерий готовности | Зависимости | Статус | Проверка |
+| --- | --- | --- | --- | --- | --- | --- |
+| A-19 | P0 | Абулхаир / родительский интегратор | Согласовать batch/submission контракт, интегрировать C-11/C-12/N-08/R-10 и провести offline API/UI/SQLite проверки с независимым Q-01 на финальный SHA | C-11, C-12, N-08, R-10; D-023 | IN_PROGRESS | Чистая отдельная codex/abulkhair-batch-delivery от3169b28; API/контракт/экспорт и проверки уточняются. Live/accuracy не входят |
+
 ## 2. Участники, ветки и владение файлами
 
 Распределение предложено для начала работы. Если команда меняет роли, нужно одновременно исправить этот раздел, `README.md` и `AGENT_TASKS.md`.
@@ -68,7 +79,7 @@
 
 | ID | Приоритет | Ответственный | Задача и критерий готовности | Зависимости | Статус | Результат/проверка |
 | --- | --- | --- | --- | --- | --- | --- |
-| Q-01 | P0 | Автор PR; интегратор проверяет результат | Для каждого PR создать отдельного reviewer gpt-6.1-sol/xhigh по CODE_REVIEW.md. Исправить подтверждённые дефекты, пройти относящиеся проверки и получить отчёт на финальные base/head SHA. Применяется ко всем участникам, включая документационные PR | Изменения, вошедшие в конкретный PR; D-012 | DONE | Отдельный gpt-6.1-sol/xhigh одобрил code43d203c после исправления P2 explicit-run→latest при slow history; независимо32E2E,7Vitest,TypeScript/build PASS. Финальные base/head и подтверждение документационного SHA фиксируются в PR №3; история PR №1/№2 сохранена. Слияние требует отдельной команды пользователя |
+| Q-01 | P0 | Автор PR; интегратор проверяет результат | Для каждого PR создать отдельного reviewer gpt-6.1-sol/xhigh по CODE_REVIEW.md. Исправить подтверждённые дефекты, пройти относящиеся проверки и получить отчёт на финальные base/head SHA. Применяется ко всем участникам, включая документационные PR | Изменения, вошедшие в конкретный PR; D-012 | IN_PROGRESS | Предыдущее ревью: отдельный gpt-6.1-sol/xhigh одобрил code43d203c после исправления P2 explicit-run→latest при slow history; независимо32E2E,7Vitest,TypeScript/build PASS. Финальные base/head и подтверждение документационного SHA фиксируются в PR №3; история PR №1/№2 сохранена. Слияние требует отдельной команды пользователя | Новый A-19 требует отдельного отчёта на финальные base/head; прежнее одобрение не переносится.
 
 ### Абулхаир — интеграция и выпуск
 
@@ -131,14 +142,14 @@
 | R-07 | P0 | Внедрить dark/light graphite tokens, Inter, Lucide и выбранные через реальный shadcn MCP компоненты; neutral selection отличается от green evidence и teal pass | R-06; D-020 | DONE | Dark/light tokens Figma, локальный Inter, Lucide и8 исходных shadcn компонентов после настоящего MCP registry discovery; TypeScript/Vite/7Vitest PASS; лимит повторного Figma code-context явно указан |
 | R-08 | P0 | Независимый scroll, resize/collapse, keyboard и narrow tabs без потери snapshots/evidence/scroll и черновиков | R-06, R-07 | DONE | Resize/keyboard/collapse/inert, narrow close/focus, actual evidence bounds после resize и manual-reading anchor, session filters, scoped drafts и async generation guards проверены; независимые N/C/root и6 reviewer repro PASS |
 | R-09 | P0 | Расширить 13 E2E, проверить desktop/narrow/long conversations/>8criteria/themes/resize/evidence/appeals/errors; build и Q-01 exact SHA | R-06—R-08; N/C workspace QA | DONE | 27 E2E/7Vitest/TypeScript/build PASS; Sol/xhigh проверил функциональный SHA и исправления, подтверждение окончательного SHA документации передаётся интегратору отдельно; liveAI не выполнялся |
-| AUD-02 | P1 | Экспорт результата/сводки из текущего интерфейса; начинать только после отдельного возобновления пользователем | X-01; основные CQA-сценарии | DEFERRED | Отложен пользователем. В текущем AUD-03 экспорт не реализуется и API не меняется |
+| AUD-02 | P1 | Экспорт результата/сводки из текущего интерфейса; возобновлён текущим поручением пользователя | X-01; C-12, R-10 | IN_PROGRESS | В рамках D-023: официальный JSON из frozen batch, без AI и автоматической публикации; до проверок не DONE |
 | AUD-03 | P1 | Обновлять очередь ровно один раз при завершении polling queued/running → completed/failed; сохранить защиту от поздних ответов другого диалога/запуска | R-02, R-06; API_CONTRACT; Q-01 | DONE | Polling обновляет очередь ровно один раз при completed/failed, ждёт ready/requestContext и отклоняет поздние ответы/ошибки. 32 Playwright,7 Vitest,TypeScript/build PASS; две исходные terminal и новая delayed-latest регрессии падали до fix. На code43d203c настоящий HTTP/SQLite/worker с внедрённым synthetic provider:2/2 PASS, два intermediate poll дают0GET очереди, terminal даёт1GET. SDK0/external0, безопасные логи; финальные base/head Q-01 в PR №3. Без отдельной команды пользователя не сливать в main |
 
 ### Необязательное развитие
 
 | ID | Приоритет | Ответственный | Задача и условие начала | Статус |
 | --- | --- | --- | --- | --- |
-| X-01 | P1 | Артём + Чингиз | Экспорт результата/сводка по критериям. Начинать после готовности основных сценариев и проверки точности | DEFERRED — AUD-02; отложен пользователем |
+| X-01 | P1 | Артём + Чингиз | Экспорт результата/сводка по критериям. Возобновлён пользователем после сравнения конкурентов | IN_PROGRESS — AUD-02/C-12/R-10; D-023 |
 | X-02 | P1 | Нурсултан | Второй проверочный проход для сложных случаев. Оставить только при измеренном улучшении с учётом задержки и полной стоимости | TODO |
 | X-03 | P2 | Нурсултан | Локальный провайдер при наличии подходящего оборудования и времени; тот же контракт и сравнительный benchmark | TODO |
 | X-04 | P2 | Абулхаир + Чингиз | PostgreSQL/внешняя очередь/интеграция Dynamics, если возникнут реальные требования к масштабу или встраиванию | TODO |
@@ -259,3 +270,4 @@
 | 2026-11-08 | Артём | AUD-02, AUD-03, Q-01 | В новой согласованной ветке codex/artem-aud03 от a8c045f исправлен пропущенный refresh очереди после terminal polling; nonterminal ответы не обновляют очередь, поздние ответы и ошибки ограничены текущим generation. AUD-02/X-01 явно отложены пользователем; backend runtime и экспорт не менялись | До fix2 terminal E2E FAILED при обновившейся карточке и устаревшем queue badge;2 stale-response checks PASS. После fix31Playwright,7Vitest,TypeScript/build и diff--check PASS; queue получает ровно +1GET при completed/failed. Новые payload-логи не добавлялись, PRIVATE_SERVER_MARKER не виден в DOM/консоли. Настоящий injected-provider HTTP QA и combined Q-01 ожидаются; live API и записи в защищённый source не выполнялись |
 | 2026-11-08 | Артём | AUD-03, Q-01 | Исправлен подтверждённый reviewer P2 на3242d9f: при explicit queued A→latest и медленной истории старый A мог начать polling уже в новом generation. Polling теперь использует общую с UI готовность: loading/error и соответствие loadedContext/requestContext; effect возобновляется после успешной загрузки, включая reload | Новый32-й E2E воспроизвёл extra old request до fix; после5 targeted polling tests и полный32Playwright36.0s PASS,7Vitest/TypeScript/build/diff--check PASS. Held latest history не вызывает old poll/queue refresh; после release polling относится к latest B и обновляет очередь один раз. Runtime backend, экспорт и логи payload не менялись; новый SHA передаётся интегратору для повторного Q-01 и настоящего synthetic-provider HTTP QA |
 | 2026-11-08 | Родительский интегратор | AUD-03, Q-01 | Подтверждённый reviewer P2 закрыт ready/requestContext gate; независимый Sol/xhigh повторил32E2E и свой delayed-latest repro без old poll/refresh. Нурсултан проверил code43d203c на настоящих HTTP/SQLite/worker/EvaluationPipeline с внедрённым gated synthetic provider. AUD-02/X-01 остаются DEFERRED; main и source repo не менялись | 32E2E/7Vitest/TypeScript/build PASS; реальный success100/failedAI_TIMEOUT:2/2 PASS, после2 nonterminal poll0GET, послеterminal1GET и ещё4.5s безповторов. Два synthetic invocation, SDK constructors0, external browserrequests0, pageerrors0; console/serverlogs без3private markers,URL,payload. Ephemeral server остановлен, SQLite хранит completed1/failed1. Q-01 финального docs-only SHA и CI — в PR №3; merge запрещён до отдельной команды пользователя |
+| 2026-11-08 | Родительский интегратор | A-19, AUD-02, X-01, Q-01 | Пользователь возобновил улучшения и делегирование. Согласованы persisted batch с request_id, frozen retry, original-only официальный экспорт и отдельный offline intake labels. Подготовительные документы63b6ccf сохранены с атрибуцией | Стартовая main3169b28 проверена ранее:238pytest/7Vitest/32E2E,build/lint/contracts/smoke PASS. Новый код ещё не принят; live0 |

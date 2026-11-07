@@ -409,7 +409,108 @@ SCHEMAS["DecisionResponse"] = obj(
     {"appeal": ref("Appeal"), "evaluation": ref("Evaluation")}
 )
 
-for item in ["ConversationSummary", "ChecklistSummary", "Evaluation", "Appeal"]:
+SCHEMAS["EvaluationBatchCreate"] = obj(
+    {
+        "request_id": UUID,
+        "conversation_ids": array(UUID, minItems=1, maxItems=1000, uniqueItems=True),
+        "checklist_version_id": UUID,
+    }
+)
+SCHEMAS["EvaluationBatchItem"] = obj(
+    {
+        "conversation_id": UUID,
+        "transcript_version_id": UUID,
+        "evaluation_id": UUID,
+        "status": STATUS,
+        "error_code": nullable(STRING),
+    }
+)
+SCHEMAS["EvaluationBatch"] = obj(
+    {
+        "id": UUID,
+        "request_id": UUID,
+        "source_batch_id": nullable(UUID),
+        "checklist_version_id": UUID,
+        "created_at": TIME,
+        "status": {"enum": ["queued", "running", "completed", "completed_with_errors"]},
+        **{
+            field: INTEGER
+            for field in ("total", "queued", "running", "completed", "failed")
+        },
+        "items": array(ref("EvaluationBatchItem"), minItems=1, maxItems=1000),
+    }
+)
+TEAM_NAME = {**STRING, "maxLength": 200}
+SCHEMAS["SubmissionExportRequest"] = obj({"batch_id": UUID, "team_name": TEAM_NAME})
+SUBMISSION_VALUES = {
+    "contact": BOOL,
+    "discovery": nullable(BOOL),
+    "identification": nullable(BOOL),
+    "consultation": {"enum": [0, 5, 10, 15, 20, None]},
+    "empathy": BOOL,
+    "dialogue": {"enum": [0, 4, 7, 10]},
+    "closure": nullable(BOOL),
+    "critical": BOOL,
+}
+SCHEMAS["SubmissionCriterion"] = {
+    "oneOf": [
+        obj(
+            {
+                "criterion_id": {"const": criterion_id},
+                "value": value,
+                "rationale": STRING,
+                "evidence_turns": array(
+                    {"type": "integer", "minimum": 1}, minItems=1, uniqueItems=True
+                ),
+            }
+        )
+        for criterion_id, value in SUBMISSION_VALUES.items()
+    ]
+}
+SCHEMAS["SubmissionScore"] = obj({"final_score": SCORE, "critical_flag": BOOL})
+SCHEMAS["SubmissionSuccess"] = obj(
+    {
+        "conversation_id": STRING,
+        "status": {"const": "ok"},
+        "criteria": array(ref("SubmissionCriterion"), minItems=8, maxItems=8),
+        "score": ref("SubmissionScore"),
+    }
+)
+SCHEMAS["SubmissionSuccess"]["properties"]["criteria"]["allOf"] = [
+    {"contains": {"properties": {"criterion_id": {"const": name}}}}
+    for name in SUBMISSION_VALUES
+]
+SCHEMAS["SubmissionError"] = obj(
+    {
+        "conversation_id": STRING,
+        "status": {"const": "error"},
+        "criteria": {"type": "array", "maxItems": 0},
+        "score": {"type": "null"},
+        "error": STRING,
+    }
+)
+SCHEMAS["SubmissionDocument"] = obj(
+    {
+        "schema_version": {"const": "1.0"},
+        "team_name": TEAM_NAME,
+        "model": obj(
+            {"mode": {"enum": ["local", "external_api", "hybrid"]}, "name": STRING}
+        ),
+        "results": array(
+            {"oneOf": [ref("SubmissionSuccess"), ref("SubmissionError")]},
+            minItems=1,
+            maxItems=1000,
+        ),
+    }
+)
+
+for item in [
+    "ConversationSummary",
+    "ChecklistSummary",
+    "Evaluation",
+    "Appeal",
+    "EvaluationBatch",
+]:
     SCHEMAS[f"{item}Page"] = obj(
         {
             "items": array(ref(item)),
@@ -548,6 +649,43 @@ PATHS = {
     "/api/v1/evaluations/{id}": {
         "get": operation(
             "getEvaluation", "Evaluation", parameters=ID, errors=(404, 422)
+        )
+    },
+    "/api/v1/evaluation-batches": {
+        "get": operation(
+            "listEvaluationBatches",
+            "EvaluationBatchPage",
+            parameters=PAGINATION,
+            errors=(422,),
+        ),
+        "post": operation(
+            "createEvaluationBatch",
+            "EvaluationBatch",
+            202,
+            "EvaluationBatchCreate",
+            errors=(404, 409, 422, 503),
+        ),
+    },
+    "/api/v1/evaluation-batches/{id}": {
+        "get": operation(
+            "getEvaluationBatch", "EvaluationBatch", parameters=ID, errors=(404, 422)
+        )
+    },
+    "/api/v1/evaluation-batches/{id}/retry-failed": {
+        "post": operation(
+            "retryFailedEvaluations",
+            "EvaluationBatch",
+            202,
+            parameters=ID,
+            errors=(404, 409, 422, 503),
+        )
+    },
+    "/api/v1/submission-exports": {
+        "post": operation(
+            "exportSubmission",
+            "SubmissionDocument",
+            body="SubmissionExportRequest",
+            errors=(404, 409, 422),
         )
     },
     "/api/v1/evaluations/{id}/appeals": {
