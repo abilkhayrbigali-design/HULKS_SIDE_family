@@ -14,8 +14,12 @@ from app.main import create_app
 
 
 class SyntheticPipeline:
+    def __init__(self):
+        self.failure_used = False
+
     async def evaluate(self, *, transcript, checklist):
-        if transcript["messages"][0]["text"] == "synthetic-failure":
+        if transcript["messages"][0]["text"] == "synthetic-failure" and not self.failure_used:
+            self.failure_used = True
             raise EvaluationError("AI_TIMEOUT")
         results = [
             {
@@ -113,8 +117,29 @@ def test_batch_worker_export_and_reload_match_canonical_contract(tmp_path):
             "synthetic-contract-1",
         }
         assert sorted(row["status"] for row in document["results"]) == ["error", "ok"]
+        response = client.post(f"/api/v1/evaluation-batches/{batch_id}/retry-failed")
+        assert response.status_code == 202
+        child_id = response.json()["id"]
+        assert response.json()["total"] == 2
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            child = client.get(f"/api/v1/evaluation-batches/{child_id}").json()
+            validator("EvaluationBatch").validate(child)
+            if child["status"] == "completed":
+                break
+            time.sleep(0.02)
+        assert child["completed"] == 2
+        child_request = {**export_request, "batch_id": child_id}
+        child_document = client.post("/api/v1/submission-exports", json=child_request).json()
+        validator("SubmissionDocument").validate(child_document)
+        assert len(child_document["results"]) == 2
+        assert all(item["status"] == "ok" for item in child_document["results"])
+        assert client.post("/api/v1/submission-exports", json=export_request).json() == document
     with TestClient(create_app(settings)) as client:
         validator("EvaluationBatch").validate(
             client.get(f"/api/v1/evaluation-batches/{batch_id}").json()
         )
         assert client.post("/api/v1/submission-exports", json=export_request).json() == document
+        assert (
+            client.post("/api/v1/submission-exports", json=child_request).json() == child_document
+        )

@@ -246,7 +246,7 @@ ProviderResult: `{ criterion_results, provider, model_requested, model_reported,
 | `POST /evaluation-batches` | `{request_id, conversation_ids, checklist_version_id}` →202 `EvaluationBatch` |
 | `GET /evaluation-batches` | `limit/offset` →`Page[EvaluationBatch]`, новые первыми |
 | `GET /evaluation-batches/{id}` | Текущее состояние всех сохранённых запусков пакета |
-| `POST /evaluation-batches/{id}/retry-failed` | Без body; после завершения создаёт/возвращает один дочерний пакет только failed |
+| `POST /evaluation-batches/{id}/retry-failed` | Без body; после завершения создаёт/возвращает дочерний пакет полного состава; новые задания только failed |
 | `POST /submission-exports` | `{batch_id, team_name}` →200 официальный JSON 1.0, `Content-Disposition: attachment; filename="results.json"` |
 
 Создание требует настроенного AI, как одиночный запуск; тестовая Python-инъекция
@@ -263,9 +263,11 @@ ProviderResult: `{ criterion_results, provider, model_requested, model_reported,
 оценкам, их сумма равна total. Статус — `queued`, `running`, `completed` либо
 `completed_with_errors`; завершённость не означает правильности ответов модели.
 
-Повтор ошибок разрешён только для завершённого пакета с failed. Он сохраняет
-исходные transcript/checklist snapshots, создаёт новые evaluations и не переписывает
-исходник. Повтор одного retry возвращает сохранённого ребёнка, не оплачивает ещё
+Повтор ошибок разрешён только для завершённого пакета с failed. Дочерний пакет
+сохраняет полный состав и исходные transcript/checklist snapshots: completed
+evaluations переиспользуются, новые создаются только для failed. Исходный пакет
+не переписывается. Поэтому экспорт ребёнка после повтора содержит весь набор,
+а не только диалоги последней попытки. Повтор одного retry возвращает сохранённого ребёнка, не оплачивает ещё
 одну незаметную попытку. Перезапуск приложения использует имеющуюся recovery policy:
 queued продолжаются, running получают failed/INTERRUPTED.
 
