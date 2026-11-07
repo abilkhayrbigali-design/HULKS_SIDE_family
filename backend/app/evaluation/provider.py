@@ -1,11 +1,18 @@
 """OpenAI Responses adapter with one visible bounded retry budget and safe failures."""
 
 import asyncio
+import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
 
-from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
+from openai import (
+    APIConnectionError,
+    APIResponseValidationError,
+    APIStatusError,
+    APITimeoutError,
+    AsyncOpenAI,
+)
 from pydantic import ValidationError
 
 from app.config import ConfigurationUnavailable, Settings
@@ -180,6 +187,8 @@ class OpenAIProvider:
                         )
                     except EvaluationError:
                         raise EvaluationError("AI_INVALID_RESPONSE", retryable=True) from None
+                except (json.JSONDecodeError, UnicodeDecodeError, APIResponseValidationError):
+                    last_error = EvaluationError("AI_INVALID_RESPONSE", retryable=True)
                 except (TimeoutError, APITimeoutError):
                     last_error = EvaluationError("AI_TIMEOUT", retryable=True)
                 except APIConnectionError:

@@ -427,3 +427,32 @@ def test_cancellation_preserves_paid_attempts_and_counts_unknown_inflight(during
         asyncio.run(run())
     assert "event=ai_request_interrupted" in caplog.text
     assert SECRET not in caplog.text
+
+
+@pytest.mark.parametrize("paid_first", [False, True])
+def test_invalid_http_json_uses_retry_budget_and_preserves_accounting(paid_first, caplog):
+    _, _, payload = fixtures()
+    bad = copy.deepcopy(payload)
+    bad["criterion_results"][0]["answer"] = 1
+    calls = []
+
+    def handler(request):
+        calls.append(True)
+        if paid_first and len(calls) == 1:
+            return httpx.Response(200, json=response(bad))
+        return httpx.Response(
+            200, text='{"SYNTHETIC_PRIVATE_SENTINEL', headers={"content-type": "application/json"}
+        )
+
+    with (
+        caplog.at_level(logging.INFO, logger="cqa.evaluation"),
+        pytest.raises(EvaluationError) as err,
+    ):
+        run_with_transport(handler, retries=1)
+    assert len(calls) == 2
+    assert err.value.code == "AI_INVALID_RESPONSE"
+    assert err.value.provenance["usage"]["request_count"] == 2
+    assert err.value.provenance["usage"]["total_tokens"] is None
+    assert SECRET not in caplog.text + str(err.value)
+    if paid_first:
+        assert err.value.provenance["model_reported"] == "gpt-6-luna"
