@@ -21,9 +21,9 @@ CREATE TABLE evaluation_batches (
     op.execute("""
 CREATE TABLE evaluation_batch_items (
  batch_id VARCHAR NOT NULL REFERENCES evaluation_batches(id),
- evaluation_id VARCHAR NOT NULL UNIQUE REFERENCES evaluations(id),
+ evaluation_id VARCHAR NOT NULL REFERENCES evaluations(id),
  position INTEGER NOT NULL CHECK(position > 0),
- PRIMARY KEY(batch_id,position)
+ PRIMARY KEY(batch_id,position), UNIQUE(batch_id,evaluation_id)
 )
 """)
     for table in ("evaluation_batches", "evaluation_batch_items"):

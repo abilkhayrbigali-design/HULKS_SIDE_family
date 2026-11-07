@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from sqlalchemy import select
 
 from app.api.routes.data import DB, Limit, Offset, page
@@ -10,7 +10,8 @@ from app.models.batches import EvaluationBatch
 from app.schemas.batches import BatchCreate
 from app.schemas.batches import EvaluationBatch as BatchResponse
 from app.schemas.responses import Page
-from app.services import batches
+from app.schemas.submissions import SubmissionDocument, SubmissionExportRequest
+from app.services import batches, submissions
 from app.services.errors import ServiceError
 
 router = APIRouter(prefix="/api/v1")
@@ -52,3 +53,8 @@ def retry_batch(id: UUID, request: Request, db: DB):
     require_ai(request)
     return batches.retry_failed(db, id)
 
+
+@router.post("/submission-exports", response_model=SubmissionDocument)
+def export_submission(payload: SubmissionExportRequest, response: Response, db: DB):
+    response.headers["Content-Disposition"] = 'attachment; filename="results.json"'
+    return submissions.create(db, payload)

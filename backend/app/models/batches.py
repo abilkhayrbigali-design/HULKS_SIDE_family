@@ -1,6 +1,6 @@
 """Append-only batch membership reuses the persisted evaluation queue."""
 
-from sqlalchemy import CheckConstraint, ForeignKey
+from sqlalchemy import CheckConstraint, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.data import Base, now, uuid
@@ -20,8 +20,11 @@ class EvaluationBatch(Base):
 
 class EvaluationBatchItem(Base):
     __tablename__ = "evaluation_batch_items"
-    __table_args__ = (CheckConstraint("position > 0"),)
+    __table_args__ = (
+        UniqueConstraint("batch_id", "evaluation_id"),
+        CheckConstraint("position > 0"),
+    )
 
     batch_id: Mapped[str] = mapped_column(ForeignKey("evaluation_batches.id"), primary_key=True)
-    evaluation_id: Mapped[str] = mapped_column(ForeignKey("evaluations.id"), unique=True)
+    evaluation_id: Mapped[str] = mapped_column(ForeignKey("evaluations.id"))
     position: Mapped[int] = mapped_column(primary_key=True)

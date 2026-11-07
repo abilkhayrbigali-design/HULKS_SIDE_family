@@ -57,7 +57,7 @@ def get(session, id_):
     return snapshot(session, require(session.get(EvaluationBatch, str(id_))))
 
 
-def _save(session, *, request_id, checklist_id, snapshots, source_batch_id=None):
+def _save(session, *, request_id, checklist_id, snapshots, source_batch_id=None, reuse=()):
     row = EvaluationBatch(
         request_id=request_id,
         checklist_version_id=checklist_id,
@@ -65,14 +65,17 @@ def _save(session, *, request_id, checklist_id, snapshots, source_batch_id=None)
     )
     session.add(row)
     session.flush()
+    reused = {item.conversation_id: item for item in reuse}
     for position, (conversation_id, transcript_id) in enumerate(snapshots, 1):
-        evaluation = Evaluation(
-            conversation_id=conversation_id,
-            transcript_version_id=transcript_id,
-            checklist_version_id=checklist_id,
-        )
-        session.add(evaluation)
-        session.flush()
+        evaluation = reused.get(conversation_id)
+        if evaluation is None:
+            evaluation = Evaluation(
+                conversation_id=conversation_id,
+                transcript_version_id=transcript_id,
+                checklist_version_id=checklist_id,
+            )
+            session.add(evaluation)
+            session.flush()
         session.add(
             EvaluationBatchItem(batch_id=row.id, evaluation_id=evaluation.id, position=position)
         )
@@ -124,6 +127,7 @@ def retry_failed(session, id_):
         session,
         request_id=str(uuid4()),
         checklist_id=source.checklist_version_id,
-        snapshots=[(item.conversation_id, item.transcript_version_id) for item in failed],
+        snapshots=[(item.conversation_id, item.transcript_version_id) for item in items],
         source_batch_id=source.id,
+        reuse=[item for item in items if item.status == "completed"],
     )

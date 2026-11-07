@@ -130,14 +130,19 @@ def test_batch_retry_only_failed_preserves_snapshots_and_source(setup):
     assert child["source_batch_id"] == source["id"]
     assert child["request_id"] != source["request_id"]
     assert child["queued"] == 2
+    assert child["completed"] == 1 and child["total"] == source["total"] == 3
     assert {i["transcript_version_id"] for i in child["items"]} == {
-        i["transcript_version_id"] for i in others
+        i["transcript_version_id"] for i in source["items"]
     }
-    assert first["conversation_id"] not in {i["conversation_id"] for i in child["items"]}
+    assert child["items"][0]["evaluation_id"] == first["evaluation_id"]
+    assert {i["evaluation_id"] for i in child["items"][1:]}.isdisjoint(
+        i["evaluation_id"] for i in others
+    )
     assert client.post(f"/api/v1/evaluation-batches/{source['id']}/retry-failed").json() == child
     assert client.get(f"/api/v1/evaluation-batches/{source['id']}").json() == source
     client.portal.call(start_evaluation_worker, app)
-    assert wait_batch(client, child["id"])["completed"] == 2
+    assert wait_batch(client, child["id"])["completed"] == 3
+    assert len(pipeline.calls) == 3
     assert all(t["language"] == "RU" for t, _ in pipeline.calls)
     assert client.get(f"/api/v1/evaluation-batches/{source['id']}").json() == source
 
