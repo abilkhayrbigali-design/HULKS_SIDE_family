@@ -113,5 +113,7 @@ def test_runtime_health_and_error_responses_match_target_contract(settings):
         validator("Health").validate(client.get("/health").json())
         validator("Error").validate(client.get("/unknown").json())
         runtime = client.get("/openapi.json").json()
-    assert set(runtime["paths"]) == {"/health"}
+    assert {"/health", "/api/v1/checklists", "/api/v1/conversations/import"} <= set(
+        runtime["paths"]
+    )
     assert "post" in CONTRACT["paths"]["/api/v1/evaluations"]
