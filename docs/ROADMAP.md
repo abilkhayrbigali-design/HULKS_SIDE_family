@@ -128,6 +128,11 @@
 | R-04 | P0 | Реализовать подачу апелляции и отдельное действие проверяющего. Видны спорный критерий, комментарий, доказательства, причина решения, исходный/финальный балл; конфликт revision обработан | R-02, C-04 | DONE | Подача/confirm/override/revision409→refresh, история immutable decision.result; draft и pending-submit проверены синтетическими E2E |
 | R-05 | P0 | Провести Playwright-проверку ключевых сценариев и ручную проверку RU/KZ/EN, ошибок модели/импорта, длинных диалогов, аудио и клавиатурной навигации. Сборка проходит; mock-E2E и проверка реального AI явно разделены | R-02, R-03, R-04 | DONE | TypeScript/Vite PASS,7Vitest/13Playwright PASS; CUA actual import/detail/AI_NOT_CONFIGURED и safe console; mobile/keyboard/120реплик KZ/EN/аудио проверены E2E. Live AI исключён по указанию пользователя |
 
+| R-06 | P0 | Реализовать согласованный editable Figma workspace: постоянная очередь, самый широкий транскрипт и quality/evidence/appeals при сохранении API и всех сценариев | R-01—R-05; editable Figma A | IN_PROGRESS | Audit выполнен; основной layout ждёт editable frame |
+| R-07 | P0 | Внедрить dark/light graphite tokens, Inter, Lucide и выбранные через реальный shadcn MCP компоненты; neutral selection отличается от green evidence и teal pass | R-06; D-020 | IN_PROGRESS | Официальный MCP stdio discovery подтверждён; dependencies/config подготавливаются |
+| R-08 | P0 | Независимый scroll, resize/collapse, keyboard и narrow tabs без потери snapshots/evidence/scroll и черновиков | R-06, R-07 | IN_PROGRESS | Риски remount/polling/draft зафиксированы до реализации |
+| R-09 | P0 | Расширить 13 E2E, проверить desktop/narrow/long conversations/>8criteria/themes/resize/evidence/appeals/errors; build и Q-01 exact SHA | R-06—R-08; N/C workspace QA | IN_PROGRESS | Текущие 13 регрессий остаются обязательными; новые проверки после реализации |
+
 ### Необязательное развитие
 
 | ID | Приоритет | Ответственный | Задача и условие начала | Статус |

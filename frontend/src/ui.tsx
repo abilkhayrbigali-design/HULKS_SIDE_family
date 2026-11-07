@@ -1,5 +1,21 @@
-import { AlertCircle, ArrowLeft, LoaderCircle, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  LoaderCircle,
+  X,
+  CircleCheck,
+  CircleX,
+  Clock3,
+} from "lucide-react";
+import { useRef } from "react";
+import { Badge } from "./components/ui/badge";
+import { Button } from "./components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetDescription,
+} from "./components/ui/sheet";
 import type { ReactNode } from "react";
 import { ApiError } from "./api/client";
 import type { Status } from "./api/types";
@@ -25,12 +41,18 @@ export const statusLabel: Record<Status, string> = {
 };
 export function StatusBadge({ status }: { status: Status }) {
   return (
-    <span className={`badge ${status}`}>
-      {["queued", "running"].includes(status) && (
-        <LoaderCircle size={12} className="spin" />
-      )}
+    <Badge variant="outline" className={`badge ${status}`}>
+      {status === "completed" ? (
+        <CircleCheck size={11} />
+      ) : status === "failed" ? (
+        <CircleX size={11} />
+      ) : status === "running" ? (
+        <LoaderCircle size={11} className="spin" />
+      ) : (
+        <Clock3 size={11} />
+      )}{" "}
       {statusLabel[status]}
-    </span>
+    </Badge>
   );
 }
 export function ErrorBox({
@@ -81,77 +103,46 @@ export function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
-  const modal = useRef<HTMLElement>(null);
-  const previousFocus = useRef(document.activeElement as HTMLElement | null);
-  const close = useRef(onClose);
-  close.current = onClose;
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        close.current();
-      }
-      if (event.key === "Tab") {
-        const focusable = Array.from(
-          modal.current?.querySelectorAll<HTMLElement>(
-            "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]",
-          ) ?? [],
-        ).filter((e) => e.getClientRects().length > 0);
-        const first = focusable[0],
-          last = focusable[focusable.length - 1];
-        if (
-          event.shiftKey &&
-          (document.activeElement === first ||
-            document.activeElement === modal.current ||
-            !modal.current?.contains(document.activeElement))
-        ) {
-          event.preventDefault();
-          last?.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first?.focus();
-        }
-      }
-    };
-    modal.current
-      ?.querySelector<HTMLElement>(
-        "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]",
-      )
-      ?.focus();
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      previousFocus.current?.focus();
-    };
-  }, []);
+  const previousFocus = useRef(document.activeElement as HTMLElement | null),
+    closeButton = useRef<HTMLButtonElement>(null);
   return (
-    <div
-      className="modal-backdrop"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
       }}
     >
-      <section
-        className="modal"
-        ref={modal}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
+      <SheetContent
+        className="import-sheet"
+        side="right"
+        showCloseButton={false}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          closeButton.current?.focus();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          previousFocus.current?.focus();
+        }}
       >
         <header>
-          <h2>{title}</h2>
-          <button
-            className="icon-button"
+          <SheetTitle>{title}</SheetTitle>
+          <Button
+            ref={closeButton}
+            variant="ghost"
+            size="icon-sm"
             aria-label="Закрыть"
             onClick={onClose}
           >
-            <X size={20} />
-          </button>
+            <X size={18} />
+          </Button>
         </header>
-        {children}
-      </section>
-    </div>
+        <SheetDescription className="sr-only">
+          Импорт группы данных или загрузка JSON с транскриптами.
+        </SheetDescription>
+        <div className="import-sheet-body">{children}</div>
+      </SheetContent>
+    </Sheet>
   );
 }
 export function BackLink() {

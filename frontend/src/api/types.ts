@@ -108,7 +108,7 @@ export interface Assessment {
   gross_error: boolean | null;
   criteria: CriterionAssessment[];
   sections: {
-    name: string;
+    name: string | null;
     base_points: number;
     applicable_weight: number;
     total: number | null;
