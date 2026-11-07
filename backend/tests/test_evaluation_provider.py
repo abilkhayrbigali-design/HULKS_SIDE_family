@@ -293,3 +293,137 @@ def test_outer_async_timeout_also_bounds_injected_clients():
         assert err.value.provenance["usage"]["request_count"] == 1
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "field,value", [("output", None), ("output", []), ("status", "incomplete")]
+)
+def test_malformed_response_envelope_is_safe_and_keeps_paid_usage(field, value):
+    _, _, payload = fixtures()
+    body = response(payload)
+    body[field] = value
+    with pytest.raises(EvaluationError) as err:
+        run_with_transport(lambda request: httpx.Response(200, json=body), retries=0)
+    assert err.value.code in {"AI_INVALID_RESPONSE", "AI_INCOMPLETE"}
+    assert err.value.provenance["usage"]["total_tokens"] == 120
+
+
+def test_provider_owned_client_is_closed_once_and_injected_client_is_not_closed():
+    class FakeClient:
+        closed = 0
+
+        async def close(self):
+            self.closed += 1
+
+    async def run():
+        client = FakeClient()
+        provider = OpenAIProvider(settings(), client=client)
+        await provider.aclose()
+        assert client.closed == 0
+        provider._owns_client = True
+        await provider.aclose()
+        await provider.aclose()
+        assert client.closed == 1
+
+    asyncio.run(run())
+
+
+def test_pipeline_requires_actual_attempt_and_sanitizes_invalid_provider_result():
+    class FakeProvider:
+        async def evaluate(self, transcript, checklist, prompt_version):
+            return self.result
+
+    async def run():
+        transcript, checklist, _ = fixtures()
+        provider = FakeProvider()
+        provider.result = json.loads((FIXTURES / "provider.response.json").read_text())
+        provider.result["usage"]["request_count"] = 0
+        with pytest.raises(EvaluationError) as err:
+            await EvaluationPipeline(settings(), provider).evaluate(
+                transcript=transcript, checklist=checklist
+            )
+        assert err.value.code == "AI_INVALID_RESPONSE"
+        provider.result = {"SYNTHETIC_PRIVATE_SENTINEL": "invalid structure"}
+        with pytest.raises(EvaluationError) as err:
+            await EvaluationPipeline(settings(), provider).evaluate(
+                transcript=transcript, checklist=checklist
+            )
+        assert err.value.code == "AI_INVALID_RESPONSE"
+        assert SECRET not in str(err.value)
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "language,text",
+    [
+        ("RU", "Здравствуйте! Как получить справку?"),
+        ("KZ", "Сәлеметсіз бе! Анықтаманы қайдан алуға болады?"),
+        ("EN", "Hello! Where can I download my statement?"),
+    ],
+)
+def test_multilingual_text_is_sent_without_translation_or_truncation(language, text):
+    transcript, _, payload = fixtures()
+    transcript["language"] = language
+    transcript["messages"][0]["text"] = text
+    captured = []
+
+    def handler(request):
+        captured.append(json.loads(request.content))
+        return httpx.Response(200, json=response(payload))
+
+    run_with_transport(handler, transcript=transcript)
+    actual = json.loads(captured[0]["input"][0]["content"])["untrusted_transcript_snapshot"]
+    assert actual["messages"][0]["text"] == text
+    assert actual["language"] == language
+
+
+@pytest.mark.parametrize("during_request", [False, True])
+def test_cancellation_preserves_paid_attempts_and_counts_unknown_inflight(during_request, caplog):
+    async def run():
+        transcript, checklist, payload = fixtures()
+        bad = copy.deepcopy(payload)
+        bad["criterion_results"][0]["answer"] = 1
+        cancellation_point = asyncio.Event()
+        calls = []
+
+        async def handler(request):
+            calls.append(True)
+            if len(calls) == 1:
+                return httpx.Response(200, json=response(bad))
+            cancellation_point.set()
+            await asyncio.Event().wait()
+
+        async def sleep(_):
+            if during_request:
+                return
+            cancellation_point.set()
+            await asyncio.Event().wait()
+
+        async with AsyncOpenAI(
+            api_key=SECRET,
+            max_retries=0,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        ) as client:
+            provider = OpenAIProvider(settings(), client=client, sleep=sleep)
+            task = asyncio.create_task(
+                provider.evaluate(
+                    TranscriptSnapshot.model_validate(transcript),
+                    ChecklistSnapshot.model_validate(checklist),
+                    PROMPT_VERSION,
+                )
+            )
+            await asyncio.wait_for(cancellation_point.wait(), timeout=1)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError) as err:
+                await task
+            usage = err.value.provenance["usage"]
+            assert usage["request_count"] == (2 if during_request else 1)
+            assert usage["input_tokens"] == (None if during_request else 100)
+            assert usage["total_tokens"] == (None if during_request else 120)
+            assert err.value.provenance["model_reported"] == "gpt-6-luna"
+
+    with caplog.at_level(logging.INFO, logger="cqa.evaluation"):
+        asyncio.run(run())
+    assert "event=ai_request_interrupted" in caplog.text
+    assert SECRET not in caplog.text
