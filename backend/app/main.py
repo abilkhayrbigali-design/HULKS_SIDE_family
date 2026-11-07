@@ -3,9 +3,11 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from importlib import import_module
 from pathlib import Path
 from time import perf_counter
 from typing import Literal
+from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,9 +15,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import Engine, create_engine, event, text
+from sqlalchemy import URL, Engine, create_engine, event, text
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import QueuePool
 from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -127,9 +129,18 @@ class SafeErrorMiddleware:
 def build_engine(settings: Settings) -> Engine:
     """One engine serves migrations, API sessions and the in-process evaluation worker."""
     url = settings.sqlalchemy_url
-    if url.database != ":memory:":
+    options = {}
+    if url.database == ":memory:":
+        # A private named shared-memory DB gives each transaction its own connection.
+        # StaticPool would let an idle worker commit another Session's transaction.
+        url = URL.create(
+            "sqlite",
+            database=f"file:cqa-{uuid4().hex}",
+            query={"mode": "memory", "cache": "shared", "uri": "true"},
+        )
+        options["poolclass"] = QueuePool
+    else:
         Path(url.database or "").parent.mkdir(parents=True, exist_ok=True)
-    options = {"poolclass": StaticPool} if url.database == ":memory:" else {}
     engine = create_engine(url, connect_args={"check_same_thread": False, "timeout": 5}, **options)
 
     @event.listens_for(engine, "connect")
@@ -154,10 +165,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         lifecycle_logger.info("event=application_starting")
         engine = None
+        memory_keeper = None
         try:
             try:
                 engine = build_engine(configured)
                 application.state.engine = engine
+                if configured.sqlalchemy_url.database == ":memory:":
+                    # Keep the named memory DB alive even if a pooled connection is invalidated.
+                    memory_keeper = engine.connect()
                 with engine.begin() as connection:
                     migrate(configured.sqlalchemy_url.render_as_string(), connection=connection)
                 application.state.session_factory = session_factory(engine)
@@ -178,8 +193,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 log_internal_error("APPLICATION_SHUTDOWN_FAILED", exc)
                 shutdown_failed = True
             try:
-                if engine is not None:
-                    engine.dispose()
+                try:
+                    if memory_keeper is not None:
+                        memory_keeper.close()
+                finally:
+                    if engine is not None:
+                        engine.dispose()
             except Exception as exc:
                 log_internal_error("APPLICATION_SHUTDOWN_FAILED", exc)
                 shutdown_failed = True
@@ -196,6 +215,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         },
     )
     application.state.settings = configured
+    # The SDK configures its logger from OPENAI_LOG at import time. Do that before
+    # suppression, so a lazy provider import cannot turn payload logging back on.
+    import_module("openai")
     logging.basicConfig(level=configured.log_level, format="%(levelname)s %(name)s %(message)s")
     logging.getLogger("cqa").setLevel(configured.log_level)
     # Payload/URL/SQL diagnostics stay disabled even when application diagnostics use DEBUG.

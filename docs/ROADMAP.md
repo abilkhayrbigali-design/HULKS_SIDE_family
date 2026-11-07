@@ -79,6 +79,8 @@
 
 | A-14 | P0 | Собрать автономный запуск C/N/R: startup migration/seed, data/evaluation API и worker, раздача frontend, полный Compose/CI и offline HTTP smoke. Подтвердить явный отказ AI без ключа и отсутствие секретов в startup/SDK/SQL-логах | A-01, C-01/C-02, N-01/N-02, R-01; D-014; живые вызовы отложены пользователем | IN_PROGRESS | Lifespan миграции/seed и data API, настройки Luna, Docker api/app, Compose и smoke реализуются в codex/abulkhair; финальная проверка после модулей C/N/R |
 
+| A-15 | P0 | Устранить подтверждённые ревью/интеграцией риски: изоляция memory транзакций от polling worker, безопасный порядок импорта SDK при OPENAI_LOG=debug, остановка smoke worker до удаления временной БД. Регрессии воспроизводят старое поведение и проходят после исправления | A-14; независимое Q-01 review A; D-014 | IN_PROGRESS | Реализуются shared-memory QueuePool/keeper, SDK import до suppression и LIFO smoke cleanup; проверка в assembled root после A-delta |
+
 ### Чингиз — сервер и данные
 
 | ID | Приоритет | Задача и критерий готовности | Зависимости | Статус | Результат/проверка |
@@ -221,3 +223,5 @@
 | 2026-11-07 | Артём | R-01—R-05 | Начата реализация типизированного React-клиента, карточки, редактора и апелляций. origin/main отсутствует в пустом рабочем GitHub repo; база local main ce2d45c согласована интегратором | Чистая worktree codex/artem; документы и контракт прочитаны |
 | 2026-11-07 | Нурсултан | N-01—N-05, D-015, Q-01 | Реализованы SQL-free Responses provider/pipeline, Decimal scoring и offline benchmark; границы согласованы с Чингизом/Абулхаиром. Живое OpenAI и человеческий GT отсутствуют по текущему режиму; статусы больших N-задач не подменяют эти проверки | До финализации: 55 synthetic evaluation tests passed; make check ранее 179 passed. Финальные проверки и независимый reviewer выполняются перед передачей |
 | 2026-11-07 | Чингиз | C-05, Q-01 | Независимый Sol/xhigh reviewer нашёл P2: graceful cancellation во время backoff после оплаченного ответа теряла usage. Добавлен реальный SDK/MockTransport→retry→stop regression, который воспроизвёл provenance=null. Worker сохраняет per-call cancellation provenance; provider fix выполняет Нурсултан | До fix regression FAILED как ожидалось; после N 473bd33 и C worker fix прошло 57 tests (20 evaluation/appeals +37 data), включая регрессию. Lifecycle integration отдельно PASS; Ruff/diff чистые. Reviewer повторно проверяет итоговый SHA |
+
+| 2026-11-07 | Абулхаир | A-15 | Исправляются P2 memory/StaticPool из Q-01 и подтверждённый lazy SDK logger reset. Smoke cleanup останавливает сервер перед удалением временной БД | Две новые регрессии на старом assembled root воспроизвели ошибки: rollback оставляет1строку; OPENAI_LOG=debug сбрасывает уровень50→10. Проверка исправлений после merge A-delta |

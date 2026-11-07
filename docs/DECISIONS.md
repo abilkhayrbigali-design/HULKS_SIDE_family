@@ -122,13 +122,13 @@ SDK и pipeline проверяются только внедряемыми кл�
 
 ## D-014. Сборка приложения и проверка без живых AI-вызовов
 
-**Решение:** `create_app` подключает data/evaluation API; lifespan создаёт один SQLite engine, применяет Alembic на его connection, создаёт session factory и идемпотентный исходный чек-лист, затем запускает внутрипроцессный worker. При остановке worker освобождается до engine. Прикладные startup/shutdown ошибки имеют фиксированные безопасные коды; ключ не нужен для готовности API. Сохранённые `queued/running` обрабатывает worker по D-001—D-007, без сетевого запроса при старте приложения.
+**Решение:** `create_app` подключает data/evaluation API; lifespan создаёт один SQLite engine, применяет Alembic на его connection, создаёт session factory и идемпотентный исходный чек-лист, затем запускает внутрипроцессный worker. При остановке worker освобождается до engine. Для :memory: используется уникальная named shared-memory SQLite, отдельные соединения QueuePool и keeper на срок lifespan: polling worker не может зафиксировать чужую транзакцию. Прикладные startup/shutdown ошибки имеют фиксированные безопасные коды; ключ не нужен для готовности API. Сохранённые `queued/running` обрабатывает worker по D-001—D-007, Startup не делает проверочный вызов AI; сохранённые queued начинают обрабатываться после запуска worker по обычным правилам и могут обращаться к AI при настроенном ключе.
 
 **Интерфейс:** Vite собирает `frontend/dist`; FastAPI отдаёт только `/` и `/assets`. Hash-навигация клиента не требует catch-all, который мог бы перехватить 404/405 API. Docker target `api` содержит backend и Alembic; target `app` добавляет собранный frontend. `compose.yaml` запускает один процесс/один volume; `compose.api.yaml` остаётся для отдельного backend.
 
 **Проверка:** offline smoke запускает сервер с новой временной БД и принудительно пустыми `OPENAI_API_KEY`/`CQA_DATASET_API_URL`, проверяет импорт, чтение, исходный чек-лист и `AI_NOT_CONFIGURED` без созданной оценки. Интеграционные тесты проверяют реальные ответы по общим JSON Schema. Моки провайдера предназначены только для тестов, не включаются в пользовательский рабочий режим. A-03/N-04 с реальными оценками остаются невыполненными до разрешения пользователя на живые вызовы и наличия экспертной разметки.
 
-**Настройки:** `OPENAI_MODEL=gpt-6-luna`; `CQA_LLM_MAX_OUTPUT_TOKENS=12000`; `CQA_LLM_REASONING_EFFORT=medium` (low/medium/high). Подробные HTTP/OpenAI/SQL логи отключены даже при DEBUG приложения. Значения настроек, URL и payload не попадают в startup-диагностику.
+**Настройки:** `OPENAI_MODEL=gpt-6-luna`; `CQA_LLM_MAX_OUTPUT_TOKENS=12000`; `CQA_LLM_REASONING_EFFORT=medium` (low/medium/high). SDK импортируется перед настройкой логов, чтобы поздний import с OPENAI_LOG=debug не включал payload-логирование. Подробные HTTP/OpenAI/SQL логи отключены даже при DEBUG приложения. Значения настроек, URL и payload не попадают в startup-диагностику.
 
 ## D-015. SQL-free AI boundary and bounded visible attempts
 

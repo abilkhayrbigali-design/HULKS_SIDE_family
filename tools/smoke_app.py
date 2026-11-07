@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import ExitStack
 from pathlib import Path
 from uuid import uuid4
 
@@ -99,17 +100,29 @@ def exercise(client, *, api_only):
     require(missing.status_code == 404, "API_404_FAILED")
 
 
+def stop_server(process):
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api-only", action="store_true")
     arguments = parser.parse_args(argv)
-    process = None
     try:
         if not arguments.api_only:
             require(
                 (ROOT / "frontend/dist/index.html").is_file(), "FRONTEND_BUILD_MISSING"
             )
-        with tempfile.TemporaryDirectory(prefix="cqa-smoke-") as directory:
+        with ExitStack() as cleanup:
+            directory = cleanup.enter_context(
+                tempfile.TemporaryDirectory(prefix="cqa-smoke-")
+            )
             with socket.socket() as listener:
                 listener.bind(("127.0.0.1", 0))
                 port = listener.getsockname()[1]
@@ -139,6 +152,8 @@ def main(argv=None):
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+            # LIFO cleanup stops the DB worker before removing its temporary database.
+            cleanup.callback(stop_server, process)
             with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=5) as client:
                 deadline = time.monotonic() + 30
                 while True:
@@ -154,17 +169,17 @@ def main(argv=None):
     except SmokeFailure as exc:
         print(f"event=smoke_failed error={exc.code}", file=sys.stderr)
         return 1
-    except (httpx.HTTPError, OSError, ValueError, KeyError, IndexError, TypeError):
+    except (
+        httpx.HTTPError,
+        OSError,
+        ValueError,
+        KeyError,
+        IndexError,
+        TypeError,
+        subprocess.SubprocessError,
+    ):
         print("event=smoke_failed error=SMOKE_INTERNAL_ERROR", file=sys.stderr)
         return 1
-    finally:
-        if process is not None and process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
     print("event=smoke_completed status=completed upstream_requests=0")
     return 0
 
