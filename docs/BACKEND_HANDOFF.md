@@ -48,7 +48,10 @@ Final пересчитывается calculate_assessment без AI. Run-level r
 Импорт выполняет HTTP до DB-транзакции. Исходные тексты/timestamp и подписанные
 URL сохраняются без нормализации; URL/тексты не попадают в логи.
 
-Проверки: 148 backend tests passed, Ruff check/format, git diff --check.
+Проверки: 148 backend tests passed до дополнительной cancellation-регрессии;
+после её исправления с N 473bd33 отдельно 57 tests (20 evaluation/appeals +37 data)
+passed и lifecycle integration PASS против combined startup. Ruff check/format,
+git diff --check чистые. Итоговый общий suite выполняет интегратор.
 До интеграции тесты запускались с AI-пакетом sibling worktree d44a128:
 
 ```bash
