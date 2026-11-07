@@ -74,3 +74,20 @@ logger.info(
 В результате задачи/PR укажи журнал и события, короткие шаги воспроизведения и фактическую команду проверки. Не прикладывай необработанный приватный журнал. Обнови роадмап вместе с реализацией; существенную смену общего подхода сначала зафиксируй в `DECISIONS.md`.
 
 Логи приложения видны в терминале. Сохранение локального файла и просмотр контейнера описаны в [README](../README.md#логи-для-диагностики). `artifacts/` и `*.log` игнорируются Git; файлы журналов в коммит не включаются.
+
+## Пакетная оценка и сдача (A-19)
+
+Backend использует `cqa.batches`: INFO `evaluation_batch_saved records=N` только
+после commit. `cqa.submissions`: INFO `submission_export_completed records=N failed=N`
+после успешного завершения операции; WARNING `submission_export_rejected` с
+фиксированными `SUBMISSION_CHECKLIST_INCOMPATIBLE`/`SUBMISSION_DUPLICATE_CONVERSATION_ID`,
+либо `submission_result_rejected error=SUBMISSION_INVALID_RESULT records=N`.
+Сами evaluations/worker сохраняют текущие события; отдельный HTTP/polling лог не
+добавляется. Успешный экспорт означает корректное формирование файла, не точность AI.
+
+Frontend передаёт только фиксированное событие, HTTP-статус и разрешённый safe code.
+Название команды, batch/request IDs, фильтры, payload экспорта, explanation и ошибки
+провайдера в консоль не попадают. Offline intake использует `cqa.benchmark`;
+в журнале только результат/счётчики и фиксированный код, без путей, case IDs,
+имён аудиторов и содержимого human labels. Сценарии проверки: no-key batch503,
+частичный failed, конфликт request_id, несовместимый экспорт и невалидный human draft.
