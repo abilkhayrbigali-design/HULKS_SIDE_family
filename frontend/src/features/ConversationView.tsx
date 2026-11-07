@@ -53,7 +53,10 @@ export function evidenceIds(e: Evidence, messages: { id: string }[]) {
     ? messages.slice(start, end + 1).map((m) => m.id)
     : [];
 }
-export function answerLabel(c: CriterionAssessment, d?: Criterion) {
+export function answerLabel(
+  c: Pick<CriterionAssessment, "answer" | "applicability">,
+  d?: Criterion,
+) {
   if (c.applicability === "not_applicable") return "N/A";
   if (typeof c.answer === "boolean")
     return d?.type === "flag"
@@ -397,9 +400,8 @@ export function ConversationView({
           <div>
             <strong>{errorMessage(evaluation.error?.code)}</strong>
             <small>
-              Код:{" "}
-              {safeCode(evaluation.error?.code)}
-              . Ошибочный запуск сохранён в истории.
+              Код: {safeCode(evaluation.error?.code)}. Ошибочный запуск сохранён
+              в истории.
             </small>
             <p>
               Исправьте причину и нажмите «Оценить диалог», чтобы создать новый

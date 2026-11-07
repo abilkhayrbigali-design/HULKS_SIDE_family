@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { existsSync } from "node:fs";
 export default defineConfig({
   testDir: "./tests",
   timeout: 30000,
@@ -11,7 +12,9 @@ export default defineConfig({
     headless: true,
     viewport: { width: 1440, height: 1000 },
     launchOptions: {
-      executablePath: process.env.CQA_CHROMIUM_PATH || "/usr/bin/chromium",
+      executablePath:
+        process.env.CQA_CHROMIUM_PATH ||
+        (existsSync("/usr/bin/chromium") ? "/usr/bin/chromium" : undefined),
       args: ["--no-sandbox"],
     },
     screenshot: "only-on-failure",

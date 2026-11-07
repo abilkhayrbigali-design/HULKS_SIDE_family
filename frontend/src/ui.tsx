@@ -86,7 +86,6 @@ export function Modal({
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
-
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -100,7 +99,12 @@ export function Modal({
         ).filter((e) => e.getClientRects().length > 0);
         const first = focusable[0],
           last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
+        if (
+          event.shiftKey &&
+          (document.activeElement === first ||
+            document.activeElement === modal.current ||
+            !modal.current?.contains(document.activeElement))
+        ) {
           event.preventDefault();
           last?.focus();
         } else if (!event.shiftKey && document.activeElement === last) {
@@ -109,7 +113,11 @@ export function Modal({
         }
       }
     };
-    modal.current?.focus();
+    modal.current
+      ?.querySelector<HTMLElement>(
+        "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]",
+      )
+      ?.focus();
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);

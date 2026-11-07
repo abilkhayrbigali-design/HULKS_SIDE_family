@@ -94,48 +94,50 @@ export function Appeals({
             void submit();
           }}
         >
-          <label className="field">
-            Спорный критерий
-            <select
-              value={criterion}
-              onChange={(e) => setCriterion(e.target.value)}
+          <fieldset disabled={busy} className="form-fieldset">
+            <label className="field">
+              Спорный критерий
+              <select
+                value={criterion}
+                onChange={(e) => setCriterion(e.target.value)}
+              >
+                {definitions.criteria.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Комментарий
+              <textarea
+                required
+                rows={3}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Почему оценку стоит пересмотреть?"
+              />
+            </label>
+            <button
+              className="button primary small"
+              disabled={
+                busy ||
+                !comment.trim() ||
+                items.some(
+                  (a) => a.criterion_id === criterion && a.status === "open",
+                )
+              }
             >
-              {definitions.criteria.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Комментарий
-            <textarea
-              required
-              rows={3}
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Почему оценку стоит пересмотреть?"
-            />
-          </label>
-          <button
-            className="button primary small"
-            disabled={
-              busy ||
-              !comment.trim() ||
-              items.some(
-                (a) => a.criterion_id === criterion && a.status === "open",
-              )
-            }
-          >
-            Отправить апелляцию
-          </button>
-          {items.some(
-            (a) => a.criterion_id === criterion && a.status === "open",
-          ) && (
-            <p className="muted">
-              По этому критерию уже есть открытая апелляция.
-            </p>
-          )}
+              Отправить апелляцию
+            </button>
+            {items.some(
+              (a) => a.criterion_id === criterion && a.status === "open",
+            ) && (
+              <p className="muted">
+                По этому критерию уже есть открытая апелляция.
+              </p>
+            )}
+          </fieldset>
         </form>
       </div>
       <div className="appeal-history-heading">
@@ -145,7 +147,7 @@ export function Appeals({
         </button>
       </div>
       {Boolean(error) && <ErrorBox error={error} />}
-      {loading ? (
+      {loading && items.length === 0 ? (
         <Loading />
       ) : items.length === 0 ? (
         <Empty
@@ -155,7 +157,7 @@ export function Appeals({
       ) : (
         items.map((a) => (
           <AppealCard
-            key={`${a.id}-${a.current_revision}-${a.status}`}
+            key={a.id}
             appeal={a}
             definition={
               definitions.criteria.find((c) => c.id === a.criterion_id)!
@@ -163,12 +165,20 @@ export function Appeals({
             messages={messages}
             onEvidence={onEvidence}
             onReload={async () => {
-              const next = await api.evaluation(evaluation.id);
+              const [next, refreshed] = await Promise.all([
+                api.evaluation(evaluation.id),
+                allPages((offset) => api.appeals(evaluation.id, offset)),
+              ]);
               onUpdated(next);
-              setReload((v) => v + 1);
+              setItems(refreshed);
             }}
-            onDecision={(next) => {
+            onDecision={(next, resolved) => {
               onUpdated(next);
+              setItems((current) =>
+                current.map((item) =>
+                  item.id === resolved.id ? resolved : item,
+                ),
+              );
               setReload((v) => v + 1);
             }}
           />
@@ -190,7 +200,7 @@ function AppealCard({
   messages: Message[];
   onEvidence: (e: Evidence) => void;
   onReload: () => Promise<void>;
-  onDecision: (e: Evaluation) => void;
+  onDecision: (e: Evaluation, appeal: Appeal) => void;
 }) {
   const [action, setAction] = useState<"confirm" | "override">("confirm");
   const [reason, setReason] = useState("");
@@ -255,7 +265,7 @@ function AppealCard({
     setError(undefined);
     try {
       const response = await api.decide(a.id, decision);
-      onDecision(response.evaluation);
+      onDecision(response.evaluation, response.appeal);
     } catch (e) {
       setError(e);
     } finally {
@@ -308,8 +318,29 @@ function AppealCard({
               : "Оценка изменена"}
           </strong>
           <p>{a.decision.reason}</p>
+          <div className="decision-result">
+            <span>
+              Принятый ответ:{" "}
+              <strong>{answerLabel(a.decision.result, d)}</strong>
+            </span>
+            <p>{a.decision.result.explanation}</p>
+            <div className="evidence-list">
+              {a.decision.result.evidence.map((e, i) => (
+                <button
+                  key={i}
+                  className="evidence-button"
+                  onClick={() => onEvidence(e)}
+                >
+                  {e.kind === "message"
+                    ? e.message_id
+                    : `${e.start_message_id}–${e.end_message_id}`}
+                </button>
+              ))}
+            </div>
+          </div>
           <small>
-            {date(a.decision.created_at)} · решение сохранено в истории
+            {date(a.decision.created_at)} · принято на ревизии{" "}
+            {a.decision.expected_revision}
           </small>
         </div>
       ) : (
@@ -324,93 +355,82 @@ function AppealCard({
               void submit();
             }}
           >
-            <label className="field">
-              Решение
-              <select
-                value={action}
-                onChange={(e) =>
-                  setAction(e.target.value as "confirm" | "override")
-                }
-              >
-                <option value="confirm">Подтвердить текущую оценку</option>
-                <option value="override">Изменить оценку</option>
-              </select>
-            </label>
-            {action === "override" && (
-              <>
-                <label className="field">
-                  Применимость
-                  <select
-                    value={applicability}
-                    onChange={(e) =>
-                      setApplicability(
-                        e.target.value as "applicable" | "not_applicable",
-                      )
-                    }
-                  >
-                    <option value="applicable">Применим</option>
-                    {d.allow_na && (
-                      <option value="not_applicable">N/A · неприменим</option>
-                    )}
-                  </select>
-                </label>
-                {applicability === "applicable" && (
+            <fieldset disabled={busy} className="form-fieldset">
+              <label className="field">
+                Решение
+                <select
+                  value={action}
+                  onChange={(e) =>
+                    setAction(e.target.value as "confirm" | "override")
+                  }
+                >
+                  <option value="confirm">Подтвердить текущую оценку</option>
+                  <option value="override">Изменить оценку</option>
+                </select>
+              </label>
+              {action === "override" && (
+                <>
                   <label className="field">
-                    Новый ответ
+                    Применимость
                     <select
-                      value={answer}
-                      onChange={(e) => setAnswer(e.target.value)}
+                      value={applicability}
+                      onChange={(e) =>
+                        setApplicability(
+                          e.target.value as "applicable" | "not_applicable",
+                        )
+                      }
                     >
-                      {d.type === "scale" ? (
-                        d.scale!.map((p) => (
-                          <option key={p.value} value={p.value}>
-                            {p.value} · {p.description}
-                          </option>
-                        ))
-                      ) : (
-                        <>
-                          <option value="true">
-                            {d.type === "flag" ? "Да · обнаружено" : "Да"}
-                          </option>
-                          <option value="false">
-                            {d.type === "flag" ? "Нет · не обнаружено" : "Нет"}
-                          </option>
-                        </>
+                      <option value="applicable">Применим</option>
+                      {d.allow_na && (
+                        <option value="not_applicable">N/A · неприменим</option>
                       )}
                     </select>
                   </label>
-                )}
-                <label className="field">
-                  Вид доказательства
-                  <select
-                    value={kind}
-                    onChange={(e) =>
-                      setKind(e.target.value as "message" | "range")
-                    }
-                  >
-                    <option value="message">Реплика</option>
-                    <option value="range">Диапазон реплик</option>
-                  </select>
-                </label>
-                <label className="field">
-                  {kind === "range" ? "Начало диапазона" : "Реплика"}
-                  <select
-                    value={start}
-                    onChange={(e) => setStart(e.target.value)}
-                  >
-                    {messages.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.id} · {m.speaker} · {m.timestamp}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {kind === "range" && (
+                  {applicability === "applicable" && (
+                    <label className="field">
+                      Новый ответ
+                      <select
+                        value={answer}
+                        onChange={(e) => setAnswer(e.target.value)}
+                      >
+                        {d.type === "scale" ? (
+                          d.scale!.map((p) => (
+                            <option key={p.value} value={p.value}>
+                              {p.value} · {p.description}
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="true">
+                              {d.type === "flag" ? "Да · обнаружено" : "Да"}
+                            </option>
+                            <option value="false">
+                              {d.type === "flag"
+                                ? "Нет · не обнаружено"
+                                : "Нет"}
+                            </option>
+                          </>
+                        )}
+                      </select>
+                    </label>
+                  )}
                   <label className="field">
-                    Конец диапазона
+                    Вид доказательства
                     <select
-                      value={end}
-                      onChange={(e) => setEnd(e.target.value)}
+                      value={kind}
+                      onChange={(e) =>
+                        setKind(e.target.value as "message" | "range")
+                      }
+                    >
+                      <option value="message">Реплика</option>
+                      <option value="range">Диапазон реплик</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    {kind === "range" ? "Начало диапазона" : "Реплика"}
+                    <select
+                      value={start}
+                      onChange={(e) => setStart(e.target.value)}
                     >
                       {messages.map((m) => (
                         <option key={m.id} value={m.id}>
@@ -419,48 +439,67 @@ function AppealCard({
                       ))}
                     </select>
                   </label>
-                )}
-              </>
-            )}
-            <label className="field">
-              Причина решения
-              <textarea
-                required
-                rows={3}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Объясните решение на основе диалога"
-              />
-            </label>
-            {Boolean(error) && <ErrorBox error={error} />}
-            {error instanceof ApiError && error.status === 409 && (
-              <div className="warning-box">
-                <p>
-                  Сохранённые данные изменились. Обновите обращение и проверьте
-                  актуальное решение перед повтором.
-                </p>
-                <button
-                  type="button"
-                  className="button small"
-                  disabled={busy}
-                  onClick={async () => {
-                    try {
-                      await onReload();
-                    } catch (e) {
-                      setError(e);
-                    }
-                  }}
-                >
-                  Обновить обращение
-                </button>
-              </div>
-            )}
-            <button
-              className="button primary small"
-              disabled={busy || !reason.trim()}
-            >
-              {busy ? "Сохраняем…" : "Сохранить решение"}
-            </button>
+                  {kind === "range" && (
+                    <label className="field">
+                      Конец диапазона
+                      <select
+                        value={end}
+                        onChange={(e) => setEnd(e.target.value)}
+                      >
+                        {messages.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.id} · {m.speaker} · {m.timestamp}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </>
+              )}
+              <label className="field">
+                Причина решения
+                <textarea
+                  required
+                  rows={3}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Объясните решение на основе диалога"
+                />
+              </label>
+              {Boolean(error) && <ErrorBox error={error} />}
+              {error instanceof ApiError && error.status === 409 && (
+                <div className="warning-box">
+                  <p>
+                    Сохранённые данные изменились. Обновите обращение и
+                    проверьте актуальное решение перед повтором.
+                  </p>
+                  <button
+                    type="button"
+                    className="button small"
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        await onReload();
+                        setError(undefined);
+                      } catch (e) {
+                        setError(e);
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Обновить обращение
+                  </button>
+                </div>
+              )}
+              <button
+                className="button primary small"
+                disabled={busy || !reason.trim()}
+              >
+                {busy ? "Сохраняем…" : "Сохранить решение"}
+              </button>
+            </fieldset>
           </form>
         </details>
       )}
