@@ -7,14 +7,27 @@
 | Файл | Что найдено | Есть ли готовый человеческий GT |
 | --- | --- | --- |
 | `CQA_Hackathon_Student_Guide_v3 1.pdf` | Стр. 1 и 3: подписанная ссылка на DEV API, метод GET, group_id DEV, 65 диалогов RU/KZ/EN и структура транскриптов | Нет; это источник переписки |
-| `CQA_Chat_Quality_Checklist 1.pdf` | Критерии и правила оценки | Нет оценок конкретных диалогов |
-| `CQA_Chat_Quality_Checklist.pdf` | Критерии и правила оценки | Нет оценок конкретных диалогов |
+| `CQA_Chat_Quality_Checklist 1.pdf` | 3 страницы: критерии; формула/N/A; применение и доказательства | Нет оценок конкретных диалогов |
+| `CQA_Chat_Quality_Checklist.pdf` | Те же 3 страницы; оба checklist побайтово совпадают | Нет оценок конкретных диалогов |
 | `CQA_Student_Guide_Appendix_Results.pdf` | Стр. 1: порядок сдачи командой результатов 10 контрольных чатов; стр. 2: JSON-формат; стр. 3: пояснения | Нет; это формат будущих ответов команды |
 | `Data 2 (1) 1.pdf` | 5 слайдов корпоративной презентации, включая социальные ссылки | Нет диалогов, API-схемы и GT |
 
-Приложение Results описывает поля `schema_version`, `team_name`, `mode`, `model`,
-`results`; строки содержат `conversation_id`, `final_score`, `critical_flag`,
-`criteria` с `criterion_id`, `value`, `score`, `rationale`, `evidence_turns`.
+Приложение Results описывает `schema_version`, `team_name`,
+`model: {mode, name}` и массив `results`; режим — `local`, `external_api` или `hybrid`.
+Успешная строка содержит `conversation_id`, `status=ok`, `criteria` из восьми
+разных критериев и `score: {final_score, critical_flag}`. В строке критерия
+только `criterion_id`, `value`, `rationale`, `evidence_turns`: собственного
+поля `score` в ней нет. `value` задаётся до применения веса; `evidence_turns` —
+однобазовые позиции в исходном транскрипте. Ошибка сохраняет ID и возвращает
+`status=error`, `criteria=[]`, `score=null`, `error` строкой.
+
+Ожидаемые submission IDs/веса: `contact` 10, `discovery` 15, `identification` 20,
+`consultation` 20, `empathy` 15, `dialogue` 15, `closure` 5, `critical` 0 (flag).
+Для будущего адаптера потребуются сопоставления `needs→discovery`,
+`management→dialogue`, `closing→closure`, `gross_errors→critical`.
+N/A перераспределяет применимый вес; `critical_flag` не обнуляет итог.
+Пути сдачи в приложении: `results/dev/results.json` и `results/prod/results.json`.
+
 Отдельного endpoint чтения эталонов и embedded hyperlinks в этом приложении нет.
 Наличие формата не является новым поручением реализовать экспорт:
 **AUD-02/X-01 остаются DEFERRED**, `results.json` не создавался.
