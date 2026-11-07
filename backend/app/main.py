@@ -149,6 +149,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        from app.services.worker import start_evaluation_worker, stop_evaluation_worker
+
         lifecycle_logger.info("event=application_starting")
         engine = None
         try:
@@ -161,17 +163,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 with application.state.session_factory.begin() as db:
                     seed(db)
                 lifecycle_logger.info("event=database_ready")
+                await start_evaluation_worker(application)
             except Exception as exc:
                 log_internal_error("APPLICATION_STARTUP_FAILED", exc)
                 raise RuntimeError("Application startup failed. Check safe server logs.") from None
             lifecycle_logger.info("event=application_ready")
             yield
         finally:
+            shutdown_failed = False
+            try:
+                await stop_evaluation_worker(application)
+            except Exception as exc:
+                log_internal_error("APPLICATION_SHUTDOWN_FAILED", exc)
+                shutdown_failed = True
             try:
                 if engine is not None:
                     engine.dispose()
             except Exception as exc:
                 log_internal_error("APPLICATION_SHUTDOWN_FAILED", exc)
+                shutdown_failed = True
+            if shutdown_failed:
                 raise RuntimeError("Application shutdown failed. Check safe server logs.") from None
             lifecycle_logger.info("event=application_stopped")
 
@@ -234,9 +245,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return Health()
 
     # Import after defining error_response to avoid a circular installer import.
+    from app.api.evaluations import install_evaluation_api
     from app.api.install import install_data_api
 
     install_data_api(application, None, dataset_url=configured.dataset_api_url.get_secret_value())
+    install_evaluation_api(application)
     # The frontend uses hash navigation, so static files need no API-swallowing SPA fallback.
     if (configured.frontend_directory / "index.html").is_file():
 
