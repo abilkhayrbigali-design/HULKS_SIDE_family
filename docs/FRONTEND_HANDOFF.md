@@ -13,7 +13,7 @@ npm --prefix frontend run build
 npm --prefix frontend run test:e2e
 ```
 
-Dev: `http://127.0.0.1:5173`, proxy `/api` → `http://127.0.0.1:8000`. API относительный `/api/v1`. Production output: `frontend/dist`; same-origin раздачу делает FastAPI. Приложение использует hash-навигацию `#/dialogues`, `#/dialogues/{id}?evaluation={id}` и `#/checklists`, поэтому серверный SPA fallback не требуется. Внешние шрифты, телеметрия и ключи в frontend не добавлены.
+Dev: `http://127.0.0.1:5173`, proxy `/api` → `http://127.0.0.1:8000`. API относительный `/api/v1`. Production output: `frontend/dist`. Контракт интеграции: раздачу этого каталога на одном origin подключает Абулхаир в FastAPI; серверная реализация не входит в коммиты ветки frontend. Приложение использует hash-навигацию `#/dialogues`, `#/dialogues/{id}?evaluation={id}` и `#/checklists`, поэтому серверный SPA fallback не требуется. Внешние шрифты, телеметрия и ключи в frontend не добавлены.
 
 Для Playwright автоматически используется `/usr/bin/chromium`, если он существует. Можно задать `CQA_CHROMIUM_PATH`; иначе нужен установленный штатный браузер Playwright (`npm --prefix frontend exec playwright install chromium`). CI должен предоставить браузер перед E2E. Vite запускается самим Playwright, если порт 5173 свободен; в обычной локальной сессии существующий сервер переиспользуется.
 

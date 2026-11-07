@@ -446,6 +446,7 @@ test("mobile navigation has no page overflow", async ({ page }) => {
     page.getByRole("heading", { name: "Чек-листы", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".sidebar")).not.toHaveClass(/is-open/);
+  await expect(page.locator(".sidebar")).not.toBeInViewport();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
