@@ -2,18 +2,22 @@
 
 import json
 import logging
+import os
+import subprocess
+import sys
+import time
 import traceback
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
 from openapi_spec_validator import validate
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from app.config import Settings
-from app.main import create_app
+from app.main import build_engine, create_app
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = json.loads((ROOT / "contracts/openapi.json").read_text())
@@ -67,6 +71,39 @@ def test_verbose_library_payload_logs_are_suppressed(caplog):
         for name in ("openai", "httpx", "httpcore", "sqlalchemy.engine", "sqlalchemy.pool"):
             logging.getLogger(name).warning("synthetic-private-library-payload")
     assert "synthetic-private-library-payload" not in caplog.text
+
+
+def test_sdk_debug_environment_cannot_reenable_payload_logging():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import logging; import app.main; import openai; "
+            "logging.getLogger('openai').warning('synthetic-private-sdk-marker'); "
+            "assert logging.getLogger('openai').getEffectiveLevel() >= logging.CRITICAL",
+        ],
+        env={**os.environ, "OPENAI_LOG": "debug", "OPENAI_API_KEY": "", "CQA_DATASET_API_URL": ""},
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "synthetic-private-sdk-marker" not in result.stdout + result.stderr
+
+
+def test_memory_worker_does_not_commit_a_request_transaction(settings):
+    with TestClient(create_app(settings)) as client:
+        engine = client.app.state.engine
+        with engine.begin() as connection:
+            connection.execute(text("CREATE TABLE atomicity_probe (value INTEGER)"))
+        with client.app.state.session_factory() as db:
+            db.execute(text("INSERT INTO atomicity_probe VALUES (1)"))
+            # The idle worker polls during this transaction; its commit must be independent.
+            time.sleep(0.6)
+            db.rollback()
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM atomicity_probe")) == 0
 
 
 def test_startup_migrates_and_seeds_one_checklist(settings, caplog):
@@ -134,6 +171,36 @@ def test_startup_failure_has_safe_diagnostics(settings, caplog):
     assert "event=application_stopped" in caplog.text
     errors = [record for record in caplog.records if record.name == "cqa.errors"]
     assert len(errors) == 1
+    assert errors[0].levelno == logging.ERROR
+
+
+@pytest.mark.parametrize("failure_phase", ["start", "stop"])
+def test_worker_lifecycle_failure_is_safe_and_disposes_engine(settings, caplog, failure_phase):
+    engine = build_engine(settings)
+    start, stop = AsyncMock(), AsyncMock()
+    (start if failure_phase == "start" else stop).side_effect = RuntimeError(
+        "synthetic-private-worker-failure"
+    )
+    caplog.set_level(logging.INFO, logger="cqa")
+    with (
+        patch("app.main.build_engine", return_value=engine),
+        patch.object(engine, "dispose", wraps=engine.dispose) as dispose,
+        patch("app.services.worker.start_evaluation_worker", start),
+        patch("app.services.worker.stop_evaluation_worker", stop),
+    ):
+        with pytest.raises(RuntimeError) as error, TestClient(create_app(settings)):
+            pass
+    start.assert_awaited_once()
+    stop.assert_awaited_once()
+    dispose.assert_called_once()
+    rendered = "".join(traceback.format_exception(error.value)) + caplog.text
+    assert "synthetic-private-worker-failure" not in rendered
+    expected_code = (
+        "APPLICATION_STARTUP_FAILED" if failure_phase == "start" else "APPLICATION_SHUTDOWN_FAILED"
+    )
+    errors = [record for record in caplog.records if record.name == "cqa.errors"]
+    assert len(errors) == 1
+    assert expected_code in errors[0].getMessage()
     assert errors[0].levelno == logging.ERROR
 
 

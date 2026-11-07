@@ -79,6 +79,8 @@
 
 | A-14 | P0 | Собрать автономный запуск C/N/R: startup migration/seed, data/evaluation API и worker, раздача frontend, полный Compose/CI и offline HTTP smoke. Подтвердить явный отказ AI без ключа и отсутствие секретов в startup/SDK/SQL-логах | A-01, C-01/C-02, N-01/N-02, R-01; D-014; живые вызовы отложены пользователем | IN_PROGRESS | Lifespan миграции/seed и data API, настройки Luna, Docker api/app, Compose и smoke реализуются в codex/abulkhair; финальная проверка после модулей C/N/R |
 
+| A-15 | P0 | Устранить подтверждённые ревью/интеграцией риски: изоляция memory транзакций от polling worker, безопасный порядок импорта SDK при OPENAI_LOG=debug, остановка smoke worker до удаления временной БД. Регрессии воспроизводят старое поведение и проходят после исправления | A-14; независимое Q-01 review A; D-014 | IN_PROGRESS | Реализуются shared-memory QueuePool/keeper, SDK import до suppression и LIFO smoke cleanup; проверка в assembled root после A-delta |
+
 ### Чингиз — сервер и данные
 
 | ID | Приоритет | Задача и критерий готовности | Зависимости | Статус | Результат/проверка |
@@ -213,3 +215,5 @@
 | 2026-11-07 | Абулхаир | A-14 IN_PROGRESS: общий Connection для миграций/SQLite memory, startup seed/data API, static index/assets, Luna settings, offline smoke и полная инфраструктура. Живые вызовы не выполняются | Финальная проверка ждёт C/N/R; оба Compose config валидны, Docker daemon недоступен по правам socket |
 
 | 2026-11-07 | Абулхаир | A-14/A-06: root staging 2edaaf3 проверен без живых вызовов | Ruff/format/exports успешны; 193/194 pytest прошли, старый C fixture подменял уже не используемый Engine (исправляет владелец); offline HTTP smoke успешен, upstream_requests=0. Следующая проверка включает C response_model и frontend |
+
+| 2026-11-07 | Абулхаир | A-15 | Исправляются P2 memory/StaticPool из Q-01 и подтверждённый lazy SDK logger reset. Smoke cleanup останавливает сервер перед удалением временной БД | Две новые регрессии на старом assembled root воспроизвели ошибки: rollback оставляет1строку; OPENAI_LOG=debug сбрасывает уровень50→10. Проверка исправлений после merge A-delta |
