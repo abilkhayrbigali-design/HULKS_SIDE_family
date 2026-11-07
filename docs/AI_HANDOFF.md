@@ -64,7 +64,8 @@ MockTransport для тестов. Внедрённый клиент закры�
 диагностика неожиданного сбоя остаётся на обрабатывающей границе, без дублирования traceback.
 
 `test_evaluation_provider.py` через MockTransport воспроизводит 401/403/404/400/429/503,
-таймаут, отказ, incomplete, повреждённый JSON, неверный тип ответа и учёт платных повторов.
+таймаут, отказ, incomplete, повреждённый JSON (включая сырой HTTP envelope), неверный тип
+ответа, отмену в backoff/in-flight и учёт платных повторов.
 `test_missing_key_never_calls_client` проверяет честный отказ без ключа. `caplog` проверяет
 отсутствие синтетического приватного маркера. Необходимое подавление SDK DEBUG-логов в общей
 конфигурации согласовано с интегратором.
@@ -78,3 +79,10 @@ uv run --project backend --locked ruff check backend/app/evaluation backend/test
 
 Это проверки арифметики/валидации/SDK, не модельной точности. Инструкции для будущей ручной
 разметки и offline benchmark находятся в `docs/BENCHMARK.md` после реализации N-04.
+
+Фактически выполнено на финальном AI-коде: `make check UV=/tmp/dataton-review-tools/bin/uv` —
+194 passed (23 scoring, 28 provider, 14 benchmark), Ruff/format/contract exports успешны.
+Standalone CLI из `/tmp` на временных synthetic protocol vectors вернул JSON/exit 0;
+повреждённый файл дал только safe error/exit 2 без приватного маркера. Чингиз подтвердил
+совместимость своим набором worker/appeals/data; окончательная интеграционная проверка
+и отдельный Q-01 относятся к SHA объединённой версии. Новых живых вызовов/GT-метрик нет.
