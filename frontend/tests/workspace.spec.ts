@@ -497,6 +497,9 @@ test("queue filters and selected route survive a visit to checklists", async ({
   await page.getByRole("link", { name: "Диалоги", exact: true }).click();
   await expect(page.getByLabel("Язык", { exact: true })).toHaveValue("KZ");
   expect(await page.evaluate(() => location.hash)).toBe(before);
+  await page.reload();
+  await expect(page.getByLabel("Язык", { exact: true })).toHaveValue("KZ");
+  await expect(page.locator(".score-main")).toContainText("69,57");
 });
 test("partial scale is amber with maximum while arbitrary flags stay neutral", async ({
   page,

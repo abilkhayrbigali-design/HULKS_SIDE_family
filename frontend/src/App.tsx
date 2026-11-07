@@ -175,7 +175,11 @@ export function App() {
             </span>
           </aside>
           <Sheet open={mobile} onOpenChange={setMobile}>
-            <SheetContent side="left" className="navigation-sheet">
+            <SheetContent
+              side="left"
+              className="navigation-sheet"
+              aria-describedby={undefined}
+            >
               <SheetHeader>
                 <SheetTitle>HULK’S FAMILY</SheetTitle>
               </SheetHeader>
@@ -289,7 +293,11 @@ function Workspace({
         <div className="pane-toggles">
           <IconButton
             label={
-              workspace.queueCollapsed ? "Показать очередь" : "Свернуть очередь"
+              workspace.narrow
+                ? "Открыть очередь"
+                : workspace.queueCollapsed
+                  ? "Показать очередь"
+                  : "Свернуть очередь"
             }
             pressed={workspace.queueCollapsed}
             onClick={workspace.toggleQueue}

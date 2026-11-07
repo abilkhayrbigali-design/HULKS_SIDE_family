@@ -60,7 +60,15 @@ export function normalizeImport(value: unknown): OrganizerRecord[] {
     );
   return records as OrganizerRecord[];
 }
-let queuePreferences = {
+type QueuePreferences = {
+  language: string;
+  channel: string;
+  group: string;
+  search: string;
+  offset: number;
+  filters: boolean;
+};
+const defaultQueuePreferences: QueuePreferences = {
   language: "",
   channel: "",
   group: "",
@@ -68,6 +76,35 @@ let queuePreferences = {
   offset: 0,
   filters: false,
 };
+function restoreQueuePreferences(): QueuePreferences {
+  try {
+    const value = JSON.parse(
+      sessionStorage.getItem("cqa.queue.preferences") ?? "null",
+    );
+    if (
+      value &&
+      ["", "RU", "KZ", "EN"].includes(value.language) &&
+      ["", "agent chat", "voice call"].includes(value.channel) &&
+      typeof value.group === "string" &&
+      typeof value.search === "string" &&
+      Number.isSafeInteger(value.offset) &&
+      value.offset >= 0 &&
+      typeof value.filters === "boolean"
+    )
+      return {
+        language: value.language,
+        channel: value.channel,
+        group: value.group,
+        search: value.search,
+        offset: value.offset,
+        filters: value.filters,
+      };
+  } catch {
+    /* A private browser may disable optional session preferences. */
+  }
+  return { ...defaultQueuePreferences };
+}
+let queuePreferences = restoreQueuePreferences();
 export function Conversations({ selectedId }: { selectedId: string | null }) {
   const workspace = useWorkspace();
   const [page, setPage] = useState<Page<Conversation> | null>(null),
@@ -84,6 +121,14 @@ export function Conversations({ selectedId }: { selectedId: string | null }) {
     [filters, setFilters] = useState(queuePreferences.filters);
   useEffect(() => {
     queuePreferences = { language, channel, group, search, offset, filters };
+    try {
+      sessionStorage.setItem(
+        "cqa.queue.preferences",
+        JSON.stringify(queuePreferences),
+      );
+    } catch {
+      /* Keep in-memory navigation preferences. */
+    }
   }, [language, channel, group, search, offset, filters]);
   useEffect(() => {
     let active = true;
@@ -172,7 +217,6 @@ export function Conversations({ selectedId }: { selectedId: string | null }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <kbd>/</kbd>
         </label>
         <div className="queue-filter-row">
           <label>
