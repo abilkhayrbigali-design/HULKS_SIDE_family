@@ -14,6 +14,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from openai import AsyncOpenAI
 from sqlalchemy import event, select, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 
@@ -424,7 +425,6 @@ def test_paid_failure_preserves_known_provenance(setup, caplog):
 def test_graceful_stop_preserves_paid_usage_during_provider_retry(setup):
     from app.evaluation.pipeline import EvaluationPipeline
     from app.evaluation.provider import OpenAIProvider
-    from openai import AsyncOpenAI
 
     client, _, app, _ = setup
     retry_reached = threading.Event()
