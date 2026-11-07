@@ -1,0 +1,23 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: app
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CQA_DATABASE_URL: sqlite:////srv/cqa/data/private/cqa.sqlite3
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - cqa-data:/srv/cqa/data/private
+    healthcheck:
+      test: ["CMD", ".venv/bin/python", "-m", "app.healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+volumes:
+  cqa-data:

@@ -24,14 +24,31 @@ jobs:
           cache-dependency-glob: backend/uv.lock
       - run: uv python install '${{ matrix.python-version }}'
       - run: uv sync --project backend --locked --python '${{ matrix.python-version }}'
-      - run: make check
-      - name: Start API and probe database health
-        shell: bash
-        run: |
-          uv run --project backend --locked uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log &
-          api_pid=$!
-          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
-          curl --fail --retry 15 --retry-delay 1 --retry-connrefused http://127.0.0.1:8000/health
+      - run: make check-api
+      - run: uv run --project backend --locked python tools/smoke_app.py --api-only
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci
+      - run: make check-web
+  full-application:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.7"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: make setup
+      - run: make build smoke
   backend-container:
     runs-on: ubuntu-latest
     steps:
@@ -39,6 +56,8 @@ jobs:
       - name: Build and probe backend container
         shell: bash
         run: |
-          trap 'docker compose -f compose.api.yaml down --volumes' EXIT
-          docker compose -f compose.api.yaml up --build --wait --wait-timeout 180
+          trap 'docker compose down --volumes' EXIT
+          docker compose up --build --wait --wait-timeout 180
           curl --fail http://127.0.0.1:8000/health
+          curl --fail http://127.0.0.1:8000/ -o /dev/null
+          curl --fail http://127.0.0.1:8000/api/v1/checklists -o /dev/null

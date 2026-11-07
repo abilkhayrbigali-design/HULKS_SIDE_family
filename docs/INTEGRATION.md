@@ -1,42 +1,48 @@
-# Передача A-01/A-02
+# Передача интеграции A-14/A-15
 
-Серверный каркас и целевые схемы можно интегрировать независимо. Эта передача не является подтверждением согласования кода коллег: C/N/R пока отсутствуют в текущей ветке. Решение и уточнения контракта — D-007.
+Рабочий репозиторий — HULKS_SIDE_family. Репозиторий-пример только для чтения. Ниже описаны фактические границы текущей сборки; историческое состояние A-01/A-02 сохранено в Git и журнале роадмапа. Живые OpenAI-вызовы при разработке не выполняются по просьбе пользователя.
 
-Обязательные события, безопасные поля и проверки логов для каждой зоны описаны в [LOGGING.md](LOGGING.md). Добавляйте их вместе с реализацией модулей по заданиям участников.
+## Сборка и ресурсы
 
-## Чингиз — C-01/C-02
+`create_app(settings)` регистрирует data/evaluation API, безопасные обработчики и схемы ошибок. Lifespan выполняет:
 
-- Запуск: `make setup`, `make api`; `create_app(settings)` позволяет тестировать изолированные настройки без локального `.env`.
-- `request.app.state.settings` содержит Settings; `request.app.state.engine` — синхронный SQLAlchemy Engine. Engine создаётся/освобождается lifespan. Подключены FK, WAL для файловой БД и busy timeout 5 секунд. Не создавайте второй engine с другим путём; sessionmaker, Base, миграции, seed и транзакции принадлежат C-01. Сейчас health проверяет соединение, а не наличие прикладных таблиц.
-- Подключение будущего router в `create_app` с prefix=`/api/v1` — небольшая общая правка с интегратором. `main.py` и `config.py` остаются зоной A. Worker добавляется к существующему lifespan в C-02/A-03; его нет в стартовом каркасе.
-- Корневой `.env` читается независимо от cwd. Перед импортом — `settings.require_dataset()`, перед созданием реального AI-запуска — `settings.require_llm()`. После успешной проверки секрет доступен через `.get_secret_value()` только серверному адаптеру. Ошибки ConfigurationUnavailable уже преобразуются в безопасные 503. Не возвращайте и не логируйте SecretStr/URL/транскрипт.
-- Ошибки HTTPException проходят через безопасный общий обработчик, сохраняющий только `Allow` и `Retry-After` из exc.headers. Остальные заголовки и исходный detail не передаются. Собственные доменные коды задавайте явными обработчиками/`error_response`, а не передавайте приватный текст в detail. Валидационные ошибки содержат только loc/type. Запланированные коды и формы — в API_CONTRACT.md.
-- ASGI-обработчик ошибок охватывает отправку тела и фоновые задачи ответа. До заголовков возвращается JSON 500; после заголовков исходное исключение заменяется безопасным, а незавершённый поток прерывается. Уже отправленный статус изменить нельзя; журнал отмечает `error=INTERNAL_ERROR`. Сохранённый worker C-02 по-прежнему сам управляет состояниями evaluation и обработкой своих ошибок.
-- Для собственного безопасного ответа передавайте `request=request` в `error_response`: его код попадёт в одну итоговую запись `cqa.requests`. 4xx журналируются на WARNING, 5xx/поздний сбой — на ERROR; preflight тоже учитывается. Без переданного request используется общий `HTTP_<status>`. Для внутреннего исключения используйте `app.diagnostics.log_internal_error("FIXED_ERROR_CODE", exc)`: `cqa.errors` содержит только код и ограниченные места `файл:строка` в репозитории. Не используйте `logger.exception`, `exc_info`, текст/`repr` исключения или транскрипта. Новый worker использует этот помощник в своей обработке ошибок, а не полагается на HTTP middleware.
-- Pydantic должен проверять критерии/ответы строго: JSON `true` не является числовым 1, `0` не является false. JSON Schema — общий эталон структуры, не замена реализациям моделей/сервисов.
+1. Создание одного engine с foreign keys, busy timeout и WAL для файловой SQLite.
+2. Alembic на connection этого engine; это позволяет мигрировать ту же memory БД, которую используют сессии.
+3. `app.state.session_factory = session_factory(engine)` и идемпотентный `seed` исходного чек-листа.
+4. `await start_evaluation_worker(app)` после готовности БД.
+5. При завершении — `await stop_evaluation_worker(app)`, закрытие memory keeper и `engine.dispose()`.
 
-## Нурсултан — N-01/N-02
+`:memory:` получает уникальную named shared-memory SQLite и QueuePool с отдельным connection для каждой транзакции. Keeper удерживает БД до завершения lifespan. StaticPool здесь запрещён: polling worker мог бы commit незавершённой транзакции HTTP-запроса.
 
-Входы: `TranscriptSnapshot` (`id` = UUID версии транскрипта, conversation_id, language, channel, messages) и неизменяемый `ChecklistVersion` из общего OpenAPI. Рекомендуемая async-граница провайдера:
+Все HTTP-обработчики и worker используют `app.state.session_factory`. Повторно вызывать `install_data_api` после `create_app` или создавать второй engine для той же интеграционной проверки не нужно. Для проверки commit-отказа патчится фактический `app.state.engine` после входа в TestClient; чтобы изолировать отказ HTTP от polling, worker можно остановить внутри синтетического теста.
 
-```text
-await provider.evaluate(transcript_snapshot, checklist_snapshot, prompt_version)
-    -> ProviderResult
+## Backend и AI
+
+Маршруты подключаются через `install_data_api` и `install_evaluation_api`. Worker стартует/останавливается функциями из `app.services.worker`.
+
+```python
+pipeline = EvaluationPipeline(settings)
+result = await pipeline.evaluate(transcript=transcript_snapshot, checklist=checklist_snapshot)
+# result: assessment, provenance, review_required, review_reasons
+await pipeline.aclose()
 ```
 
-ProviderResult описан в `contracts/provider-result.schema.json`; результат на каждый критерий содержит criterion_id, applicability, answer, explanation, evidence, review_reasons. Провайдер не добавляет веса/итоги и не выполняет SQL. review_required выводится из причин при построении результата pipeline. Pipeline валидирует полноту, шкалы, N/A, роли/ссылки в том же снимке, затем считает Assessment через Decimal. Сервис C сохраняет состояние/результат вне сетевого вызова в транзакции.
+Pipeline и `calculate_assessment(criteria=..., results=..., messages=...)` принадлежат AI-модулю. Сохранение результата/ошибки, очередь, атомарность апелляций и snapshot-история принадлежат backend. Сетевой вызов выполняется после закрытия транзакции загрузки снимков. Worker закрывает только созданный им pipeline; тестовый injected pipeline остаётся собственностью теста.
 
-Usage содержит request_count и nullable счётчики input/output/total/cached-input/reasoning-output. Счётчики суммируются по всем попыткам; cached/reasoning — части input/output, их нельзя прибавлять повторно. При неполном usage агрегат соответствующего счётчика null. SDK retry должен быть отключён или включён в общий предел `1 + llm_max_retries`. Неизвестная стоимость null. Границу ошибки pipeline нужно подтвердить с C при реализации; полный текст исключения наружу не передаётся.
+Перед созданием настоящего evaluation проверяется `settings.require_llm()`. При отсутствии ключа API возвращает `503 / AI_NOT_CONFIGURED`, запуск и успешная оценка не создаются. `app.state.evaluation_pipeline` можно внедрить из Python для синтетических тестов; HTTP/настройки приложения не включают такой mock-режим. Startup не выполняет пробный запрос модели; ранее сохранённые queued обрабатываются обычным worker после запуска, если ключ настроен.
 
-Схема ProviderResult предназначена для проверки внутреннего результата. Не передавайте её целиком в Structured Outputs без адаптации: API модели поддерживает подмножество JSON Schema. Конкретные Pydantic-типы/классы провайдера остаются в зоне N, семантические проверки — тоже.
+SDK импортируется до настройки общих логов. Затем OpenAI/HTTP/SQL payload-логи подавляются даже при `OPENAI_LOG=debug` и `CQA_LOG_LEVEL=DEBUG`. Прикладные события остаются в `cqa.*`, без URL, секретов и текстов диалогов. Подробности — в [LOGGING.md](LOGGING.md).
 
-## Артём — R-01/R-02
+## Интерфейс и контракты
 
-- Dev URL backend — `http://127.0.0.1:8000`, frontend origin по умолчанию `http://localhost:5173`. Если frontend открыт через 127.0.0.1, добавьте именно этот origin в серверный `CQA_ALLOWED_ORIGINS`.
-- Все пути и формы доступны в целевом `contracts/openapi.json`; runtime `/openapi.json` пока содержит только health. Mock-драйвер и реальный API-клиент должны различаться явно; отсутствующий маршрут не даёт успешного результата.
-- `data/fixtures/synthetic/manifest.json` перечисляет 26 форм запросов/ответов. В этих примерах используются четыре пользовательских критерия с новыми ID, N/A и отдельным флагом, итог 70 → 100 после решения. Unknown cost = null; gross_error = null, потому что флаг назван risk_custom, а не gross_errors.
-- Карточка апелляции возвращает original/current, decision содержит полный принятый result, confirm сохраняет текущие доказательства. Числа отображайте до двух знаков. Версия чек-листа/транскрипта фиксируется запуском.
+Frontend использует hash-навигацию, базовый API `/api/v1`. Dev Vite проксирует `/api` на 8000. Production `make build` создаёт `frontend/dist`; API отдаёт `/` и `/assets`. Catch-all отсутствует, поэтому ошибочный API-путь остаётся JSON 404, а неверный метод `/health` сохраняет 405 и `Allow: GET`.
 
-## Что ещё нужно для A-01/A-02 и A-03
+Pydantic response_model документируют и проверяют реальные business-ответы. Общая ErrorResponse применяется к HTTP-ошибкам в runtime OpenAPI. Канонический источник — `contracts/definitions.py`; экспорты и синтетические примеры проверяются автоматически. `test_application.py` сверяет runtime пути/методы/статусы и канонические примеры запросов/ответов с реальными runtime schemas, а также реальные HTTP-ответы импорта/чек-листов/диалогов. Верный JSON не доказывает точность оценок модели.
 
-Нужны реальные R-01 и реализация Pydantic/провайдера, использующая общие примеры. После этого интегратор сверяет runtime OpenAPI и ответы с целевым контрактом; уточнения вносятся одновременно в definitions.py, API_CONTRACT.md, экспорты и клиент/сервер/проверки. A-03 начинается после появления частей C-01/C-02/N-01/N-02/R-01/R-02 и доступа к реальному AI. Синтетические примеры не подтверждают эту интеграцию или точность.
+## Запуск и приёмка
+
+Команды запуска и журналов — в [README.md](../README.md). `make check` проверяет backend, схемы и frontend; `make smoke` запускает отдельный сервер с новой временной БД, пустыми ключом/URL организаторов, собранным UI и проверкой честного отказа AI. Успех помечается `upstream_requests=0`. Процесс останавливается до удаления временной БД.
+
+Docker target `api` содержит backend и Alembic; `app` добавляет Vite-сборку. `compose.yaml` запускает один API-процесс и сохраняемый volume. Docker daemon локально недоступен; конфигурация проверяется `docker compose config --quiet`, фактическую сборку/health должен подтвердить CI итогового коммита.
+
+Открытая граница приёмки: A-03 с реальным OpenAI и точность относительно экспертной разметки отложены до разрешения пользователя. Синтетические тесты pipeline/апелляций не заменяют эту проверку.

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 
 from app.models.data import Checklist, Conversation, TranscriptVersion
+from app.schemas import responses
 from app.schemas.data import (
     Channel,
     ChecklistCreate,
@@ -38,37 +39,41 @@ def page(db, statement, limit, offset, convert):
     )
 
 
-@router.get("/checklists")
+@router.get("/checklists", response_model=responses.Page[responses.ChecklistSummary])
 def list_checklists(db: DB, limit: Limit = 50, offset: Offset = 0):
     return page(db, select(Checklist).order_by(Checklist.id), limit, offset, checklists.metadata)
 
 
-@router.post("/checklists", status_code=201)
+@router.post("/checklists", status_code=201, response_model=responses.ChecklistVersion)
 def create_checklist(payload: ChecklistCreate, db: DB):
     return checklists.create(db, payload)
 
 
-@router.get("/checklists/{id}")
+@router.get("/checklists/{id}", response_model=responses.ChecklistDetail)
 def get_checklist(id: str, db: DB):
     return checklists.detail(db, id)
 
 
-@router.get("/checklist-versions/{id}")
+@router.get("/checklist-versions/{id}", response_model=responses.ChecklistVersion)
 def get_version(id: str, db: DB):
     return checklists.get_version(db, id)
 
 
-@router.post("/checklists/{id}/versions", status_code=201)
+@router.post(
+    "/checklists/{id}/versions",
+    status_code=201,
+    response_model=responses.ChecklistVersion,
+)
 def create_version(id: str, payload: ChecklistUpdate, db: DB):
     return checklists.add_version(db, id, payload)
 
 
-@router.post("/conversations/import")
+@router.post("/conversations/import", response_model=responses.ImportSummary)
 def import_upload(payload: ImportRequest, db: DB):
     return conversations.import_records(db, payload)
 
 
-@router.post("/datasets/import")
+@router.post("/datasets/import", response_model=responses.ImportSummary)
 def import_dataset(payload: DatasetImport, request: Request):
     # Fetch and validate before opening any DB transaction.
     records = datasets.fetch_records(
@@ -82,7 +87,7 @@ def import_dataset(payload: DatasetImport, request: Request):
         )
 
 
-@router.get("/conversations")
+@router.get("/conversations", response_model=responses.Page[responses.ConversationSummary])
 def list_conversations(
     db: DB,
     language: Language | None = None,
@@ -111,6 +116,6 @@ def list_conversations(
     )
 
 
-@router.get("/conversations/{id}")
+@router.get("/conversations/{id}", response_model=responses.ConversationDetail)
 def get_conversation(id: str, db: DB, transcript_version_id: str | None = None):
     return conversations.detail(db, id, transcript_version_id)

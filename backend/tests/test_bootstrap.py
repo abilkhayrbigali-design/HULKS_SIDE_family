@@ -109,6 +109,9 @@ def test_dotenv_loading_and_environment_override(tmp_path, monkeypatch):
         {"CQA_LLM_MAX_RETRIES": -1},
         {"CQA_LLM_TIMEOUT_SECONDS": 0},
         {"CQA_EVALUATION_CONCURRENCY": 0},
+        {"CQA_LLM_MAX_OUTPUT_TOKENS": 0},
+        {"CQA_LLM_MAX_OUTPUT_TOKENS": 64001},
+        {"CQA_LLM_REASONING_EFFORT": "unsupported"},
         {"CQA_DATABASE_URL": "postgresql://localhost/db"},
         {"CQA_DATABASE_URL": "sqlite://user:synthetic-signature@/tmp/cqa.sqlite3"},
         {"CQA_DATABASE_URL": "sqlite://:1234/tmp/cqa.sqlite3"},
@@ -209,7 +212,7 @@ def test_errors_after_response_start_do_not_expose_private_exceptions(
     rendered = "".join(traceback.format_exception(error.value)) + caplog.text
     assert "synthetic-signature" not in rendered
     assert "INTERNAL_ERROR" in caplog.text
-    records = [record for record in caplog.records if record.name.startswith("cqa.")]
+    records = [record for record in caplog.records if record.levelno >= logging.ERROR]
     assert {record.name for record in records} == {"cqa.requests", "cqa.errors"}
     assert all(record.levelno == logging.ERROR for record in records)
 

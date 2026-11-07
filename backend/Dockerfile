@@ -1,4 +1,11 @@
-FROM python:3.13-slim
+FROM node:22-alpine AS frontend
+WORKDIR /srv/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+FROM python:3.13-slim AS api
 COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /usr/local/bin/uv
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -7,9 +14,13 @@ WORKDIR /srv/cqa/backend
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 COPY backend/app ./app
+COPY backend/alembic ./alembic
 RUN uv sync --locked --no-dev && \
     useradd --create-home --uid 10001 cqa && \
     mkdir -p /srv/cqa/data/private && chown -R cqa:cqa /srv/cqa
 USER cqa
 EXPOSE 8000
 CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log"]
+
+FROM api AS app
+COPY --from=frontend --chown=cqa:cqa /srv/frontend/dist /srv/cqa/frontend/dist

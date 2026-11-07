@@ -42,10 +42,20 @@ def session_factory(engine):
             logging.getLogger("cqa.checklists").info(
                 "event=checklist_version_saved records=%d", count
             )
+        for key, event_name in (
+            ("cqa_evaluation_queued", "evaluation_queued"),
+            ("cqa_appeal_created", "appeal_created"),
+            ("cqa_appeal_decided", "appeal_decision_saved"),
+        ):
+            count = session.info.pop(key, 0)
+            if count:
+                logging.getLogger("cqa.evaluation").info("event=%s records=%d", event_name, count)
 
     @event.listens_for(factory, "after_rollback")
     def discard_saved_operations(session):
         session.info.pop("cqa_import_summary", None)
         session.info.pop("cqa_checklist_versions", None)
+        for key in ("cqa_evaluation_queued", "cqa_appeal_created", "cqa_appeal_decided"):
+            session.info.pop(key, None)
 
     return factory
