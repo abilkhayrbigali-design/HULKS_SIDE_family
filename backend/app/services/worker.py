@@ -59,9 +59,14 @@ class EvaluationWorker:
                 with self.factory.begin() as db:
                     evaluations.complete(db, id_, result)
                 logger.info("event=evaluation_completed status=completed")
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as exc:
                 if id_ is not None:
-                    self._fail(id_, "INTERRUPTED", "Оценка прервана. Создайте новый запуск.")
+                    self._fail(
+                        id_,
+                        "INTERRUPTED",
+                        "Оценка прервана. Создайте новый запуск.",
+                        getattr(exc, "provenance", None) or provenance,
+                    )
                 raise
             except EvaluationError as exc:
                 if id_ is not None:

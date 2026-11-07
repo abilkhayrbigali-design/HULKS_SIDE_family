@@ -1,13 +1,16 @@
 """Real SQLite/HTTP/worker tests; injected AI is explicitly synthetic test code."""
 
 import asyncio
+import json
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -416,6 +419,77 @@ def test_paid_failure_preserves_known_provenance(setup, caplog):
     assert failed["provenance"] == provenance
     assert failed["error"]["code"] == "AI_TIMEOUT"
     assert any(r.name == "cqa.worker" and r.levelname == "ERROR" for r in caplog.records)
+
+
+def test_graceful_stop_preserves_paid_usage_during_provider_retry(setup):
+    from app.evaluation.pipeline import EvaluationPipeline
+    from app.evaluation.provider import OpenAIProvider
+    from openai import AsyncOpenAI
+
+    client, _, app, _ = setup
+    retry_reached = threading.Event()
+    calls = []
+
+    def respond(request):
+        calls.append(1)
+        return httpx.Response(
+            200,
+            json={
+                "id": "resp_synthetic",
+                "object": "response",
+                "created_at": 1,
+                "model": "gpt-6-luna",
+                "status": "completed",
+                "output": [
+                    {
+                        "id": "msg_synthetic",
+                        "type": "message",
+                        "role": "assistant",
+                        "status": "completed",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": json.dumps({"invalid": "synthetic-test-payload"}),
+                                "annotations": [],
+                            }
+                        ],
+                    }
+                ],
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                    "total_tokens": 120,
+                    "input_tokens_details": {"cached_tokens": 30},
+                    "output_tokens_details": {"reasoning_tokens": 5},
+                },
+            },
+        )
+
+    async def pause_retry(_):
+        retry_reached.set()
+        await asyncio.sleep(30)
+
+    settings = Settings(_env_file=None, OPENAI_API_KEY="synthetic-test-only")
+    sdk = AsyncOpenAI(
+        api_key="synthetic-test-only",
+        max_retries=0,
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)),
+    )
+    provider = OpenAIProvider(settings, client=sdk, sleep=pause_retry)
+    app.state.evaluation_worker.pipeline = EvaluationPipeline(settings, provider=provider)
+    try:
+        created = client.post("/api/v1/evaluations", json=inputs(client)).json()
+        assert retry_reached.wait(5)
+        client.portal.call(stop_evaluation_worker, app)
+        failed = wait_for(client, created["id"], "failed")
+        assert failed["error"]["code"] == "INTERRUPTED"
+        assert failed["provenance"]["usage"]["request_count"] == 1
+        assert failed["provenance"]["usage"]["input_tokens"] == 100
+        assert failed["provenance"]["usage"]["total_tokens"] == 120
+        assert failed["original"] is None
+        assert len(calls) == 1
+    finally:
+        client.portal.call(sdk.close)
 
 
 def test_decision_commit_failure_rolls_back_and_never_logs_success(setup, caplog):

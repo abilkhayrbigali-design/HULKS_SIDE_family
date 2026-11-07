@@ -33,7 +33,9 @@ Stop идемпотентен и закрывает принадлежащий �
 `await pipeline.evaluate(transcript=dict, checklist=dict)` → PipelineResult
 (assessment/provenance/review_required/review_reasons). DB Session уже закрыта
 во время await. Ошибка EvaluationError сохраняет безопасный код и известный
-provenance. Очередь хранится в SQLite: queued восстанавливаются; running при
+provenance. CancelledError.provenance передаёт известный usage при graceful stop
+во время retry/backoff; отменённая попытка с неизвестными токенами не выдаётся за ноль.
+Очередь хранится в SQLite: queued восстанавливаются; running при
 рестарте/отмене становятся failed/INTERRUPTED, платный повтор не выполняется.
 
 Апелляции сериализуются короткой BEGIN IMMEDIATE транзакцией; один open на
