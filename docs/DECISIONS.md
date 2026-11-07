@@ -112,3 +112,33 @@ HTTP URL дополнительно отклоняет управляющие с
 | 2026-11-07 | D-012, reviewer для всей команды | Пользователь расширил процедуру на всех агентов и поручил опубликовать её в main на GitHub | A-13, Q-01; N-06 заменяется общей процедурой |
 
 При доработке добавляйте запись, сохраняйте старые решения и отмечайте замену ссылкой на новое решение. Если меняется API, обновляйте `API_CONTRACT.md` и связанные задачи в одном изменении.
+
+
+## D-016 — Сохранённые evaluation и граница worker/апелляций
+
+Дата: 2026-11-07. Ответственный: Чингиз.
+
+`POST /evaluations` фиксирует текущую версию транскрипта и явно выбранную версию
+чек-листа. Без ключа возвращается 503 `AI_NOT_CONFIGURED` до создания запуска.
+Тесты внедряют Python-объект `app.state.evaluation_pipeline`; HTTP/настройки
+не позволяют включить такой режим продукта.
+
+Worker ограничен `evaluation_concurrency`: короткая транзакция claim/load →
+`await pipeline.evaluate(transcript=dict, checklist=dict)` при закрытой Session →
+короткая транзакция complete/fail. `PipelineResult` содержит assessment, provenance,
+review_required и review_reasons. `EvaluationError` содержит фиксированный code,
+safe_message и nullable provenance; известный usage сохраняется даже при ошибке.
+`queued` после старта обрабатывается; прежний `running` становится failed/INTERRUPTED
+без повторного платного запроса. Остановка отменяет текущие задачи и закрывает
+только принадлежащий приложению pipeline/provider.
+
+SQLite защищает snapshots/оригинальные criterion_results и appeal_decisions
+триггерами. Решения выполняются в короткой BEGIN IMMEDIATE транзакции: проверка
+revision, immutable decision, final через `calculate_assessment`, revision+1,
+закрытие appeal. Сеть отсутствует. Confirm сохраняет текущий финальный ответ.
+Run-level review_reasons описывают исходный AI-запуск и сохраняются для аудита;
+предупреждения отдельных final criteria пересчитываются.
+
+API использует реальные Pydantic response_model, а не подменяет runtime OpenAPI.
+Канонические имена list checklist: latest_version_id/latest_version_number; detail:
+id/name/current_version/versions. Безопасные validation details используют loc.

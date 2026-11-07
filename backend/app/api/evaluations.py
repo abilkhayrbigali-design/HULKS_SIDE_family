@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.api.routes.data import DB, Limit, Offset, page
 from app.models.evaluations import Appeal, Evaluation
+from app.schemas import responses
 from app.schemas.evaluations import (
     AppealCreate,
     AppealStatus,
@@ -20,7 +21,7 @@ from app.services.errors import ServiceError
 router = APIRouter(prefix="/api/v1")
 
 
-@router.post("/evaluations", status_code=202)
+@router.post("/evaluations", status_code=202, response_model=responses.Evaluation)
 def create_evaluation(payload: EvaluationCreate, request: Request, db: DB):
     # Injection is available only to Python tests, never through a product setting/HTTP flag.
     if not getattr(request.app.state, "evaluation_pipeline_injected", False):
@@ -32,7 +33,7 @@ def create_evaluation(payload: EvaluationCreate, request: Request, db: DB):
     return evaluations.create(db, payload)
 
 
-@router.get("/evaluations")
+@router.get("/evaluations", response_model=responses.Page[responses.Evaluation])
 def list_evaluations(
     db: DB,
     conversation_id: UUID | None = None,
@@ -54,17 +55,17 @@ def list_evaluations(
     )
 
 
-@router.get("/evaluations/{id}")
+@router.get("/evaluations/{id}", response_model=responses.Evaluation)
 def get_evaluation(id: UUID, db: DB):
     return evaluations.get(db, id)
 
 
-@router.post("/evaluations/{id}/appeals", status_code=201)
+@router.post("/evaluations/{id}/appeals", status_code=201, response_model=responses.Appeal)
 def create_appeal(id: UUID, payload: AppealCreate, db: DB):
     return evaluations.create_appeal(db, id, payload)
 
 
-@router.get("/appeals")
+@router.get("/appeals", response_model=responses.Page[responses.Appeal])
 def list_appeals(
     db: DB,
     status: AppealStatus | None = None,
@@ -86,12 +87,12 @@ def list_appeals(
     )
 
 
-@router.get("/appeals/{id}")
+@router.get("/appeals/{id}", response_model=responses.Appeal)
 def get_appeal(id: UUID, db: DB):
     return evaluations.get_appeal(db, id)
 
 
-@router.post("/appeals/{id}/decisions")
+@router.post("/appeals/{id}/decisions", response_model=responses.DecisionResponse)
 def decide_appeal(id: UUID, payload: DecisionCreate, db: DB):
     return evaluations.decide(db, id, payload)
 
