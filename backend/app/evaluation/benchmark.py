@@ -68,6 +68,8 @@ class PredictionCase(EvaluationSchema):
     @model_validator(mode="after")
     def valid_outcome(self):
         if self.result is not None:
+            if self.result.usage.request_count < 1:
+                raise ValueError("Completed prediction requires at least one recorded attempt")
             if self.error_code is not None or self.failure_provenance is not None:
                 raise ValueError("Successful prediction cannot contain a failure")
         elif self.error_code not in {*MESSAGES, "INTERRUPTED", "EVALUATION_INTERNAL_ERROR"}:
