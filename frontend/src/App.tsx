@@ -52,11 +52,17 @@ function storedTheme() {
 }
 export function App() {
   const [current, setCurrent] = useState(route);
+  const [lastWorkspace, setLastWorkspace] = useState(() =>
+    location.hash.startsWith("#/dialogues/") ? location.hash : "#/dialogues",
+  );
   const [theme, setTheme] = useState(storedTheme);
   const [mobile, setMobile] = useState(false);
   useEffect(() => {
     const onHash = () => {
-      setCurrent(route());
+      const next = route();
+      setCurrent(next);
+      if (next.path.startsWith("/dialogues"))
+        setLastWorkspace(location.hash || "#/dialogues");
       setMobile(false);
     };
     window.addEventListener("hashchange", onHash);
@@ -74,9 +80,10 @@ export function App() {
   }, [theme]);
   const id = current.path.match(/^\/dialogues\/([^/]+)$/)?.[1];
   const checklist = current.path === "/checklists";
+  const dialogueLink = checklist ? lastWorkspace : "#/dialogues";
   const navigation = (
     <>
-      <a className={!checklist ? "active" : ""} href="#/dialogues">
+      <a className={!checklist ? "active" : ""} href={dialogueLink}>
         <Inbox size={18} />
         <span>Диалоги</span>
       </a>
@@ -141,7 +148,7 @@ export function App() {
             </a>
             <nav>
               {[
-                ["Диалоги", "#/dialogues", Inbox, !checklist],
+                ["Диалоги", dialogueLink, Inbox, !checklist],
                 ["Чек-листы", "#/checklists", ClipboardList, checklist],
               ].map(([label, href, Icon, active]) => {
                 const Glyph = Icon as typeof Inbox;
@@ -251,7 +258,13 @@ function Workspace({
             typeof value[key] === "number" &&
             value[key] >= 0 &&
             value[key] <= 100,
-        )
+        ) &&
+        Math.abs(
+          ["queue-panel", "transcript-panel", "quality-panel"].reduce(
+            (sum, key) => sum + value[key],
+            0,
+          ) - 100,
+        ) < 0.1
       )
         return value as Layout;
     } catch {
@@ -285,7 +298,13 @@ function Workspace({
           </IconButton>
           <IconButton
             label={
-              workspace.qualityCollapsed ? "Показать оценку" : "Свернуть оценку"
+              workspace.narrow
+                ? workspace.activePane === "quality"
+                  ? "Вернуться к диалогу"
+                  : "Открыть качество"
+                : workspace.qualityCollapsed
+                  ? "Показать оценку"
+                  : "Свернуть оценку"
             }
             pressed={workspace.qualityCollapsed}
             onClick={workspace.toggleQuality}
@@ -303,6 +322,7 @@ function Workspace({
           <button
             key={pane}
             role="tab"
+            data-workspace-tab={pane}
             aria-selected={workspace.activePane === pane}
             className={workspace.activePane === pane ? "active" : ""}
             onClick={() => workspace.setActivePane(pane)}
@@ -339,6 +359,17 @@ function Workspace({
           collapsible
           collapsedSize="0%"
           panelRef={workspace.queueRef}
+          inert={
+            workspace.narrow
+              ? workspace.activePane !== "queue"
+              : workspace.queueCollapsed
+          }
+          aria-hidden={
+            workspace.narrow
+              ? workspace.activePane !== "queue"
+              : workspace.queueCollapsed
+          }
+          onResize={workspace.onQueueResize}
         >
           <Conversations selectedId={id} />
         </ResizablePanel>
@@ -355,6 +386,10 @@ function Workspace({
               defaultSize="50.6%"
               minSize={workspace.narrow ? 0 : 320}
               className="workspace-panel transcript-panel"
+              inert={workspace.narrow && workspace.activePane !== "transcript"}
+              aria-hidden={
+                workspace.narrow && workspace.activePane !== "transcript"
+              }
             >
               <Empty
                 title="Выберите диалог"
@@ -373,6 +408,17 @@ function Workspace({
               collapsible
               collapsedSize="0%"
               panelRef={workspace.qualityRef}
+              inert={
+                workspace.narrow
+                  ? workspace.activePane !== "quality"
+                  : workspace.qualityCollapsed
+              }
+              aria-hidden={
+                workspace.narrow
+                  ? workspace.activePane !== "quality"
+                  : workspace.qualityCollapsed
+              }
+              onResize={workspace.onQualityResize}
               className="workspace-panel quality-panel"
             >
               <Empty

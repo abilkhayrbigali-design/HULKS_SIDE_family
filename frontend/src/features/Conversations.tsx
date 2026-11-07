@@ -60,20 +60,31 @@ export function normalizeImport(value: unknown): OrganizerRecord[] {
     );
   return records as OrganizerRecord[];
 }
+let queuePreferences = {
+  language: "",
+  channel: "",
+  group: "",
+  search: "",
+  offset: 0,
+  filters: false,
+};
 export function Conversations({ selectedId }: { selectedId: string | null }) {
   const workspace = useWorkspace();
   const [page, setPage] = useState<Page<Conversation> | null>(null),
     [error, setError] = useState<unknown>();
   const [loading, setLoading] = useState(true),
-    [language, setLanguage] = useState(""),
-    [channel, setChannel] = useState(""),
-    [group, setGroup] = useState(""),
-    [search, setSearch] = useState(""),
-    [offset, setOffset] = useState(0),
+    [language, setLanguage] = useState(queuePreferences.language),
+    [channel, setChannel] = useState(queuePreferences.channel),
+    [group, setGroup] = useState(queuePreferences.group),
+    [search, setSearch] = useState(queuePreferences.search),
+    [offset, setOffset] = useState(queuePreferences.offset),
     [reload, setReload] = useState(0),
     [importOpen, setImportOpen] = useState(false),
     [summary, setSummary] = useState<ImportSummary | null>(null),
-    [filters, setFilters] = useState(false);
+    [filters, setFilters] = useState(queuePreferences.filters);
+  useEffect(() => {
+    queuePreferences = { language, channel, group, search, offset, filters };
+  }, [language, channel, group, search, offset, filters]);
   useEffect(() => {
     let active = true;
     setLoading(true);

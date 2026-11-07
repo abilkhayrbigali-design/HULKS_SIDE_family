@@ -14,6 +14,8 @@ interface WorkspaceState {
   qualityRef: RefObject<PanelImperativeHandle | null>;
   queueRevision: number;
   refreshQueue: () => void;
+  onQueueResize: (size: { inPixels: number }) => void;
+  onQualityResize: (size: { inPixels: number }) => void;
 }
 const Context = createContext<WorkspaceState | null>(null);
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
@@ -35,6 +37,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const toggleQueue = () => {
     if (narrow) {
       setActivePane("queue");
+      requestAnimationFrame(() =>
+        document
+          .querySelector<HTMLButtonElement>('[data-workspace-tab="queue"]')
+          ?.focus(),
+      );
       return;
     }
     const ref = queueRef.current;
@@ -49,7 +56,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   };
   const toggleQuality = () => {
     if (narrow) {
-      setActivePane("quality");
+      const next = activePane === "quality" ? "transcript" : "quality";
+      setActivePane(next);
+      requestAnimationFrame(() =>
+        document
+          .querySelector<HTMLButtonElement>(`[data-workspace-tab="${next}"]`)
+          ?.focus(),
+      );
       return;
     }
     const ref = qualityRef.current;
@@ -76,6 +89,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         qualityRef,
         queueRevision,
         refreshQueue: () => setRevision((v) => v + 1),
+        onQueueResize: (size) => {
+          if (!narrow) setQueueCollapsed(size.inPixels < 1);
+        },
+        onQualityResize: (size) => {
+          if (!narrow) setQualityCollapsed(size.inPixels < 1);
+        },
       }}
     >
       {children}

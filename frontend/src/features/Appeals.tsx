@@ -17,6 +17,22 @@ import type {
 } from "../api/types";
 import { date, Empty, ErrorBox, Loading } from "../ui";
 import { answerLabel } from "./ConversationView";
+// Session-only drafts stay attached to immutable evaluation snapshots and criteria.
+// They are never written to localStorage, logs or the API before submission.
+const commentDrafts = new Map<
+  string,
+  { criterion: string; comments: Record<string, string> }
+>();
+type DecisionDraft = {
+  action: "confirm" | "override";
+  reason: string;
+  applicability: "applicable" | "not_applicable";
+  answer: string;
+  kind: "message" | "range";
+  start: string;
+  end: string;
+};
+const decisionDrafts = new Map<string, DecisionDraft>();
 export function Appeals({
   evaluation,
   definitions,
@@ -35,10 +51,27 @@ export function Appeals({
   const [items, setItems] = useState<Appeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>();
+  const draftKey = `${evaluation.id}:${evaluation.transcript_version_id}:${evaluation.checklist_version_id}`;
+  const cached = commentDrafts.get(draftKey);
   const [criterion, setCriterion] = useState(
-    initialCriterion ?? definitions.criteria[0]?.id ?? "",
+    initialCriterion ??
+      (definitions.criteria.some((c) => c.id === cached?.criterion)
+        ? cached?.criterion
+        : undefined) ??
+      definitions.criteria[0]?.id ??
+      "",
   );
-  const [comment, setComment] = useState("");
+  const [comments, setComments] = useState<Record<string, string>>(
+    () => cached?.comments ?? {},
+  );
+  const comment = comments[criterion] ?? "";
+  const setComment = (value: string) =>
+    setComments((current) => ({ ...current, [criterion]: value }));
+  useEffect(() => {
+    if (Object.values(comments).some((value) => value.trim()))
+      commentDrafts.set(draftKey, { criterion, comments });
+    else commentDrafts.delete(draftKey);
+  }, [draftKey, criterion, comments]);
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
   useEffect(() => {
@@ -69,8 +102,28 @@ export function Appeals({
     setBusy(true);
     setError(undefined);
     try {
-      await api.appeal(evaluation.id, criterion, comment.trim());
-      setComment("");
+      const submittedCriterion = criterion,
+        submittedComment = comment;
+      await api.appeal(
+        evaluation.id,
+        submittedCriterion,
+        submittedComment.trim(),
+      );
+      const stored = commentDrafts.get(draftKey);
+      if (stored?.comments[submittedCriterion] === submittedComment) {
+        const remaining = { ...stored.comments, [submittedCriterion]: "" };
+        if (Object.values(remaining).some((value) => value.trim()))
+          commentDrafts.set(draftKey, {
+            criterion: stored.criterion,
+            comments: remaining,
+          });
+        else commentDrafts.delete(draftKey);
+      }
+      setComments((current) =>
+        current[submittedCriterion] === submittedComment
+          ? { ...current, [submittedCriterion]: "" }
+          : current,
+      );
       setReload((v) => v + 1);
     } catch (e) {
       setError(e);
@@ -202,29 +255,52 @@ function AppealCard({
   onReload: () => Promise<void>;
   onDecision: (e: Evaluation, appeal: Appeal) => void;
 }) {
-  const [action, setAction] = useState<"confirm" | "override">("confirm");
-  const [reason, setReason] = useState("");
+  const cached = decisionDrafts.get(a.id);
+  const [action, setAction] = useState<"confirm" | "override">(
+    cached?.action ?? "confirm",
+  );
+  const [reason, setReason] = useState(cached?.reason ?? "");
   const [applicability, setApplicability] = useState<
     "applicable" | "not_applicable"
-  >(a.current.applicability);
+  >(cached?.applicability ?? a.current.applicability);
   const [answer, setAnswer] = useState<string>(
-    String(
-      a.current.answer ?? (d.type === "scale" ? d.scale?.[0]?.value : false),
-    ),
+    cached?.answer ??
+      String(
+        a.current.answer ?? (d.type === "scale" ? d.scale?.[0]?.value : false),
+      ),
   );
-  const [kind, setKind] = useState<"message" | "range">("message");
+  const [kind, setKind] = useState<"message" | "range">(
+    cached?.kind ?? "message",
+  );
   const [start, setStart] = useState(
-    a.current.evidence[0]?.kind === "message"
-      ? a.current.evidence[0].message_id
-      : (a.current.evidence[0]?.start_message_id ?? messages[0]?.id ?? ""),
+    cached?.start ??
+      (a.current.evidence[0]?.kind === "message"
+        ? a.current.evidence[0].message_id
+        : (a.current.evidence[0]?.start_message_id ?? messages[0]?.id ?? "")),
   );
   const [end, setEnd] = useState(
-    a.current.evidence[0]?.kind === "range"
-      ? a.current.evidence[0].end_message_id
-      : (messages[messages.length - 1]?.id ?? ""),
+    cached?.end ??
+      (a.current.evidence[0]?.kind === "range"
+        ? a.current.evidence[0].end_message_id
+        : (messages[messages.length - 1]?.id ?? "")),
   );
   const [error, setError] = useState<unknown>();
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (a.status === "resolved") {
+      decisionDrafts.delete(a.id);
+      return;
+    }
+    decisionDrafts.set(a.id, {
+      action,
+      reason,
+      applicability,
+      answer,
+      kind,
+      start,
+      end,
+    });
+  }, [a.id, a.status, action, reason, applicability, answer, kind, start, end]);
   const submit = async () => {
     if (!reason.trim()) return;
     const evidence: Evidence[] =
@@ -265,6 +341,25 @@ function AppealCard({
     setError(undefined);
     try {
       const response = await api.decide(a.id, decision);
+      const stored = decisionDrafts.get(a.id);
+      const submitted = {
+        action,
+        reason,
+        applicability,
+        answer,
+        kind,
+        start,
+        end,
+      };
+      if (
+        stored &&
+        Object.keys(submitted).every(
+          (key) =>
+            stored[key as keyof DecisionDraft] ===
+            submitted[key as keyof DecisionDraft],
+        )
+      )
+        decisionDrafts.delete(a.id);
       onDecision(response.evaluation, response.appeal);
     } catch (e) {
       setError(e);

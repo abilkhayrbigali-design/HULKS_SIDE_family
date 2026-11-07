@@ -2606,3 +2606,66 @@ input[type="checkbox"] {
   background: var(--cqa-warning-bg);
   color: var(--cqa-warning);
 }
+/* Inactive panes remain mounted for drafts/scroll, but never paint or receive input. */
+@media (max-width: 1000px) {
+  .workspace[data-active-pane="queue"] #transcript-panel,
+  .workspace[data-active-pane="queue"] #transcript-panel *,
+  .workspace[data-active-pane="queue"] #quality-panel,
+  .workspace[data-active-pane="queue"] #quality-panel *,
+  .workspace[data-active-pane="transcript"] #queue-panel,
+  .workspace[data-active-pane="transcript"] #queue-panel *,
+  .workspace[data-active-pane="transcript"] #quality-panel,
+  .workspace[data-active-pane="transcript"] #quality-panel *,
+  .workspace[data-active-pane="quality"] #queue-panel,
+  .workspace[data-active-pane="quality"] #queue-panel *,
+  .workspace[data-active-pane="quality"] #transcript-panel,
+  .workspace[data-active-pane="quality"] #transcript-panel * {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}
+.quality-body-scroll {
+  flex: 1;
+  min-height: 0;
+}
+.quality-body-scroll [data-slot="scroll-area-viewport"] > div {
+  display: block !important;
+  min-width: 0 !important;
+  max-width: 100%;
+}
+.quality-body-scroll .quality-tabs {
+  flex: none;
+  overflow: visible;
+  min-height: 0;
+}
+.quality-body-scroll .quality-tabs > [data-slot="tabs-content"] {
+  flex: none;
+  overflow: visible;
+}
+.quality-body-scroll .criteria-tab-content {
+  overflow: visible;
+}
+.quality-body-scroll .criteria-scroll {
+  height: clamp(160px, 35dvh, 380px);
+  flex: none;
+  min-height: 0;
+}
+.quality-body-scroll .criterion-evidence {
+  max-height: none;
+  overflow: visible;
+}
+.quality-body-scroll .quality-scroll {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+@media (max-width: 1000px) {
+  .workspace[data-active-pane="queue"] #transcript-panel *,
+  .workspace[data-active-pane="queue"] #quality-panel *,
+  .workspace[data-active-pane="transcript"] #queue-panel *,
+  .workspace[data-active-pane="transcript"] #quality-panel *,
+  .workspace[data-active-pane="quality"] #queue-panel *,
+  .workspace[data-active-pane="quality"] #transcript-panel * {
+    transition: none !important;
+  }
+}
