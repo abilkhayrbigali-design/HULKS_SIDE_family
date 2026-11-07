@@ -54,7 +54,14 @@ class Settings(BaseSettings):
     openai_model: str = Field(default="gpt-6-luna", alias="OPENAI_MODEL", min_length=1)
     llm_timeout_seconds: float = Field(default=90, alias="CQA_LLM_TIMEOUT_SECONDS", gt=0, le=600)
     llm_max_retries: int = Field(default=2, alias="CQA_LLM_MAX_RETRIES", ge=0, le=5)
+    llm_max_output_tokens: int = Field(
+        default=12000, alias="CQA_LLM_MAX_OUTPUT_TOKENS", ge=256, le=64000
+    )
+    llm_reasoning_effort: Literal["low", "medium", "high"] = Field(
+        default="medium", alias="CQA_LLM_REASONING_EFFORT"
+    )
     evaluation_concurrency: int = Field(default=2, alias="CQA_EVALUATION_CONCURRENCY", ge=1, le=8)
+    frontend_dist: Path = Field(default=PROJECT_ROOT / "frontend/dist", alias="CQA_FRONTEND_DIST")
     database_url: str = Field(
         default="sqlite:///./data/private/cqa.sqlite3", alias="CQA_DATABASE_URL", repr=False
     )
@@ -127,6 +134,11 @@ class Settings(BaseSettings):
         if not path.is_absolute():
             path = PROJECT_ROOT / path
         return url.set(database=str(path.resolve()))
+
+    @property
+    def frontend_directory(self) -> Path:
+        path = self.frontend_dist
+        return (path if path.is_absolute() else PROJECT_ROOT / path).resolve()
 
     def require_llm(self) -> None:
         if not self.openai_api_key.get_secret_value().strip():

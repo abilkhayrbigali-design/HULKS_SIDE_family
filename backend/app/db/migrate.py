@@ -10,10 +10,12 @@ from alembic import command
 from app.diagnostics import log_internal_error
 
 
-def migrate(url):
+def migrate(url, *, connection=None):
     config = Config()
     config.set_main_option("script_location", str(Path(__file__).resolve().parents[2] / "alembic"))
     config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+    if connection is not None:
+        config.attributes["connection"] = connection
     command.upgrade(config, "head")
 
 
