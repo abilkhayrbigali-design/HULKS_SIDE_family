@@ -281,7 +281,7 @@ function AppealCard({
           {a.status === "open" ? "Ожидает решения" : "Рассмотрена"}
         </span>
         <small>
-          {date(a.created_at)} · ревизия {a.base_revision} →{" "}
+          {date(a.created_at)} · базовая ревизия {a.base_revision} · текущая{" "}
           {a.current_revision}
         </small>
       </div>
@@ -339,7 +339,7 @@ function AppealCard({
             </div>
           </div>
           <small>
-            {date(a.decision.created_at)} · принято на ревизии{" "}
+            {date(a.decision.created_at)} · принято на базе ревизии{" "}
             {a.decision.expected_revision}
           </small>
         </div>

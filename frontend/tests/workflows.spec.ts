@@ -7,14 +7,14 @@ test("RU/KZ/EN filters, explicit example import, no-key error and safe console",
   await page.goto("/");
   await page.getByLabel("Язык", { exact: true }).selectOption("KZ");
   await expect(
-    page.getByRole("link", { name: "synthetic-KZ", exact: true }),
+    page.getByRole("link", { name: /^synthetic-KZ / }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "synthetic-RU", exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /^synthetic-RU / })).toHaveCount(
+    0,
+  );
   await page.getByLabel("Язык", { exact: true }).selectOption("EN");
   await expect(
-    page.getByRole("link", { name: "synthetic-EN", exact: true }),
+    page.getByRole("link", { name: /^synthetic-EN / }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Импортировать диалоги", exact: true })
@@ -27,12 +27,12 @@ test("RU/KZ/EN filters, explicit example import, no-key error and safe console",
     page.getByText("Импорт завершён", { exact: false }),
   ).toBeVisible();
   expect(s.posts[0].body.records[0].conversation_id).toContain("учебный");
-  await page.getByRole("link", { name: "synthetic-EN", exact: true }).click();
+  await page.getByRole("link", { name: /^synthetic-EN / }).click();
   await page
     .getByRole("button", { name: "Оценить диалог", exact: true })
     .click();
   await expect(page.getByRole("alert")).toContainText("AI_NOT_CONFIGURED");
-  await expect(page.locator(".score-overview")).toHaveCount(0);
+  await expect(page.locator(".score-main strong")).toContainText("—");
   expect(s.consoleLines.join(" ")).toContain(
     "event=ui_operation_failed status=503 error=AI_NOT_CONFIGURED",
   );
@@ -52,6 +52,7 @@ test("frozen evidence, override and confirm preserve original score after reload
       u.includes(`transcript_version_id=${s.evaluation.transcript_version_id}`),
     ),
   ).toBe(true);
+  await page.getByRole("button", { name: /Повторное обращение/ }).click();
   await page
     .getByRole("button", { name: "m0001–m0004", exact: true })
     .first()
@@ -116,7 +117,7 @@ test("frozen evidence, override and confirm preserve original score after reload
   await expect(page.locator(".score-main")).toContainText("100,00");
   await expect(page.locator(".score-secondary")).toContainText("70,00");
   await page
-    .getByRole("button", { name: "Апелляции и история", exact: true })
+    .getByRole("tab", { name: "Апелляции и история", exact: true })
     .click();
   await expect(page.locator(".appeal-card")).toHaveCount(2);
   await page.screenshot({
@@ -296,7 +297,9 @@ test("appeal revision conflict preserves reason and original result", async ({
   await expect(
     page.getByRole("textbox", { name: "Причина решения", exact: true }),
   ).toHaveValue("Причина должна остаться после конфликта");
-  await expect(page.locator(".appeal-card-heading")).toContainText("0 → 1");
+  await expect(page.locator(".appeal-card-heading")).toContainText(
+    "базовая ревизия 0 · текущая 1",
+  );
   await expect(page.locator(".score-secondary")).toContainText("70,00");
   expect(s.consoleLines.join(" ")).toContain(
     "event=ui_operation_failed status=409 error=REVISION_CONFLICT",
@@ -452,7 +455,7 @@ test("resolved decisions retain their accepted answer and evidence after later o
   ).toBeVisible();
   await page.reload();
   await page
-    .getByRole("button", { name: "Апелляции и история", exact: true })
+    .getByRole("tab", { name: "Апелляции и история", exact: true })
     .click();
   await expect(page.locator(".decision-result").last()).toContainText(
     /Принятый ответ:\s*10/,

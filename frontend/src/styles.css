@@ -2513,3 +2513,96 @@ input[type="checkbox"] {
     scroll-behavior: auto !important;
   }
 }
+/* Vertical queue scrolling must not let Radix's content table grow to a long ID. */
+.queue-scroll [data-slot="scroll-area-viewport"] > div {
+  display: block !important;
+  min-width: 0 !important;
+  max-width: 100%;
+}
+.queue-list,
+.queue-item,
+.queue-item-top,
+.queue-item-summary,
+.queue-item-bottom {
+  max-width: 100%;
+  min-width: 0;
+}
+.queue-item-summary > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.queue-item-summary > span:last-child,
+.queue-item-bottom > .badge,
+.queue-item-top > .language-tag {
+  flex-shrink: 0;
+}
+.criteria-table-heading,
+.criterion-result {
+  grid-template-columns: minmax(0, 1fr) 62px 27px 53px 24px;
+  gap: 6px;
+}
+.criteria-table-heading > span:nth-child(3),
+.criteria-table-heading > span:nth-child(4) {
+  text-align: right;
+}
+.criterion-weight {
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-size: 10px;
+  color: var(--cqa-faint);
+}
+@media (max-width: 1200px) {
+  .criteria-table-heading,
+  .criterion-result {
+    grid-template-columns: minmax(0, 1fr) 53px 24px 43px 22px;
+    gap: 4px;
+  }
+  .criteria-table-heading {
+    font-size: 9px;
+  }
+  .criterion-select {
+    font-size: 11px;
+  }
+  .criterion-index {
+    display: none;
+  }
+}
+@media (max-width: 1000px) {
+  .criteria-table-heading,
+  .criterion-result {
+    grid-template-columns: minmax(0, 1fr) 76px 35px 66px 30px;
+    gap: 9px;
+  }
+  .criterion-index {
+    display: block;
+  }
+  .criterion-select {
+    font-size: 13px;
+  }
+  .criteria-table-heading {
+    font-size: 10px;
+  }
+}
+@media (max-width: 600px) {
+  .criteria-table-heading,
+  .criterion-result {
+    grid-template-columns: minmax(0, 1fr) 55px 24px 44px 24px;
+    gap: 5px;
+  }
+  .criterion-index {
+    display: none;
+  }
+  .criterion-select {
+    font-size: 12px;
+  }
+  .criteria-table-heading {
+    font-size: 9px;
+  }
+}
+.answer-badge.partial {
+  background: var(--cqa-warning-bg);
+  color: var(--cqa-warning);
+}

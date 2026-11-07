@@ -76,6 +76,7 @@ export async function mockAPI(
     if (path.startsWith("/conversations/"))
       return json({
         ...conversation,
+        id: decodeURIComponent(path.split("/").at(-1)!),
         current_transcript_version_id: "latest-different-version",
         transcript_version_id:
           url.searchParams.get("transcript_version_id") ??
@@ -210,4 +211,113 @@ export async function mockAPI(
     return fail("NOT_FOUND", 404);
   });
   return { posts, observed, consoleLines, checklist, conversation, evaluation };
+}
+
+/** Dedicated, explicitly synthetic wire snapshots; never a product data fallback. */
+export async function mockWorkspaceAPI(page: Page) {
+  const current = fixture("workspace/conversation.current.json");
+  const archived = fixture("workspace/conversation.archived.json");
+  const v1 = fixture("workspace/checklist.v1.json"),
+    v2 = fixture("workspace/checklist.v2.json");
+  const archivedEvaluation = fixture("workspace/evaluation.archived.json"),
+    currentEvaluation = fixture("workspace/evaluation.current.json");
+  const requests: string[] = [],
+    consoleLines: string[] = [];
+  page.on("console", (message) => {
+    if (["error", "warning"].includes(message.type()))
+      consoleLines.push(message.text());
+  });
+  await page.route("**/api/v1/**", async (route) => {
+    const request = route.request(),
+      url = new URL(request.url()),
+      path = url.pathname.replace("/api/v1", "");
+    requests.push(path + url.search);
+    const send = (json: unknown, status = 200) =>
+      route.fulfill({ json, status });
+    if (request.method() !== "GET")
+      return send(
+        {
+          error: {
+            code: "AI_NOT_CONFIGURED",
+            message: "Synthetic test server: no live calls",
+            details: [],
+          },
+        },
+        503,
+      );
+    if (path === "/conversations") {
+      const summary = {
+        ...current,
+        latest_evaluation: {
+          id: currentEvaluation.id,
+          status: currentEvaluation.status,
+          original_total: currentEvaluation.original.total,
+          final_total: currentEvaluation.final.total,
+          created_at: currentEvaluation.created_at,
+        },
+      };
+      return send(pageOf([summary]));
+    }
+    if (path.startsWith("/conversations/"))
+      return send(
+        url.searchParams.get("transcript_version_id") ===
+          archived.transcript_version_id
+          ? archived
+          : current,
+      );
+    if (path === "/checklists")
+      return send(
+        pageOf([
+          {
+            id: v2.checklist_id,
+            name: v2.name,
+            latest_version_id: v2.id,
+            latest_version_number: v2.version_number,
+          },
+        ]),
+      );
+    if (path.startsWith("/checklists/"))
+      return send({
+        id: v2.checklist_id,
+        name: v2.name,
+        current_version: v2,
+        versions: [v2, v1],
+      });
+    if (path.startsWith("/checklist-versions/"))
+      return send(path.endsWith(v1.id) ? v1 : v2);
+    if (path === "/evaluations")
+      return send(fixture("workspace/evaluations.page.json"));
+    if (path.startsWith("/evaluations/"))
+      return send(
+        path.endsWith(archivedEvaluation.id)
+          ? archivedEvaluation
+          : currentEvaluation,
+      );
+    if (path === "/appeals")
+      return send(
+        url.searchParams.get("evaluation_id") === archivedEvaluation.id
+          ? fixture("workspace/appeals.page.json")
+          : pageOf([]),
+      );
+    return send(
+      {
+        error: {
+          code: "NOT_FOUND",
+          message: "Test route missing",
+          details: [],
+        },
+      },
+      404,
+    );
+  });
+  return {
+    current,
+    archived,
+    v1,
+    v2,
+    archivedEvaluation,
+    currentEvaluation,
+    requests,
+    consoleLines,
+  };
 }

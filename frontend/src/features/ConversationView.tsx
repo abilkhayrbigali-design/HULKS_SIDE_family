@@ -23,6 +23,7 @@ import {
   Minus,
   CircleX,
   CircleCheck,
+  CircleAlert,
   MessageSquarePlus,
   ExternalLink,
 } from "lucide-react";
@@ -94,13 +95,44 @@ export function ConversationView({
   evaluationId: string | null;
 }) {
   const workspace = useWorkspace();
+  const mounted = useRef(false);
+  const context = useRef({
+    key: `${id}:${evaluationId ?? "latest"}`,
+    generation: 0,
+  });
+  const contextKey = `${id}:${evaluationId ?? "latest"}`;
+  if (context.current.key !== contextKey)
+    context.current = {
+      key: contextKey,
+      generation: context.current.generation + 1,
+    };
+  const generation = context.current.generation;
+  const requestContext = `${contextKey}:${generation}`;
+  const isCurrent = () =>
+    mounted.current &&
+    context.current.generation === generation &&
+    context.current.key === contextKey;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    setBusy(false);
+    setActionError(undefined);
+  }, [id, evaluationId]);
   const transcriptRoot = useRef<HTMLDivElement>(null);
   const transcriptScroll = useRef(0);
+  const pendingEvidence = useRef<string | null>(null);
   const [focusedCriterion, setFocusedCriterion] = useState<string | null>(null);
+  const [loadedContext, setLoadedContext] = useState("");
   const [conversation, setConversation] = useState<ConversationDetail | null>(
     null,
   );
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
+  const observedEvaluation = useRef(evaluation);
+  observedEvaluation.current = evaluation;
   const [history, setHistory] = useState<Evaluation[]>([]);
   const [definitions, setDefinitions] = useState<ChecklistVersion | null>(null);
   const [checklists, setChecklists] = useState<ChecklistSummary[]>([]);
@@ -126,6 +158,7 @@ export function ConversationView({
     setHighlight([]);
     setFocusedCriterion(null);
     transcriptScroll.current = 0;
+    pendingEvidence.current = null;
     setAppealCriterion(null);
     async function load() {
       try {
@@ -143,6 +176,7 @@ export function ConversationView({
           run ? api.version(run.checklist_version_id) : Promise.resolve(null),
         ]);
         if (active) {
+          setLoadedContext(requestContext);
           setHistory(runs);
           setEvaluation(run);
           setConversation(detail);
@@ -220,8 +254,32 @@ export function ConversationView({
       clearTimeout(timer);
     };
   }, [id, evaluationId, evaluation?.id, polling, reload]);
+  const applyEvidenceScroll = () => {
+    if (!isCurrent()) return;
+    const viewport = transcriptRoot.current?.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]',
+    );
+    const target = pendingEvidence.current
+      ? refs.current[pendingEvidence.current]
+      : null;
+    if (!viewport || !target || !viewport.clientHeight) return;
+    const top =
+      target.getBoundingClientRect().top -
+      viewport.getBoundingClientRect().top +
+      viewport.scrollTop -
+      viewport.clientHeight / 2 +
+      target.clientHeight / 2;
+    viewport.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+    transcriptScroll.current = viewport.scrollTop;
+    pendingEvidence.current = null;
+    target.focus({ preventScroll: true });
+  };
   useEffect(() => {
     requestAnimationFrame(() => {
+      if (pendingEvidence.current) {
+        applyEvidenceScroll();
+        return;
+      }
       const viewport = transcriptRoot.current?.querySelector<HTMLElement>(
         '[data-slot="scroll-area-viewport"]',
       );
@@ -232,28 +290,9 @@ export function ConversationView({
     if (!conversation) return;
     const ids = evidenceIds(evidence, conversation.messages);
     setHighlight(ids);
+    pendingEvidence.current = ids[0] ?? null;
     if (workspace.narrow) workspace.setActivePane("transcript");
-    requestAnimationFrame(() => {
-      const viewport = transcriptRoot.current?.querySelector<HTMLElement>(
-        '[data-slot="scroll-area-viewport"]',
-      );
-      const target = refs.current[ids[0]];
-      if (viewport && target) {
-        const top =
-          target.getBoundingClientRect().top -
-          viewport.getBoundingClientRect().top +
-          viewport.scrollTop -
-          viewport.clientHeight / 2 +
-          target.clientHeight / 2;
-        viewport.scrollTo({
-          top: Math.max(0, top),
-          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
-            ? "auto"
-            : "smooth",
-        });
-        target.focus({ preventScroll: true });
-      }
-    });
+    requestAnimationFrame(applyEvidenceScroll);
   };
   const start = async () => {
     if (!versionId) return;
@@ -261,16 +300,23 @@ export function ConversationView({
     setActionError(undefined);
     try {
       const result = await api.evaluate(id, versionId);
-      location.hash = `/dialogues/${encodeURIComponent(id)}?evaluation=${encodeURIComponent(result.id)}`;
       workspace.refreshQueue();
+      if (!isCurrent()) return;
+      if (result.conversation_id !== id)
+        throw new ApiError(502, "INVALID_RESPONSE");
+      location.hash = `/dialogues/${encodeURIComponent(id)}?evaluation=${encodeURIComponent(result.id)}`;
       if (result.id === evaluationId) setReload((v) => v + 1);
     } catch (e) {
-      setActionError(e);
+      if (isCurrent()) setActionError(e);
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   };
-  const ready = !loading && conversation?.id === id;
+  const ready =
+    !loading &&
+    !error &&
+    conversation?.id === id &&
+    loadedContext === requestContext;
   const final = ready ? evaluation?.final : null;
   const original = ready ? evaluation?.original : null;
   const criterion =
@@ -284,6 +330,13 @@ export function ConversationView({
     showEvidence(result.evidence[0]);
   };
   const assessmentChanged = (next: Evaluation) => {
+    if (
+      !isCurrent() ||
+      next.conversation_id !== id ||
+      next.id !== observedEvaluation.current?.id ||
+      next.revision < observedEvaluation.current.revision
+    )
+      return;
     setEvaluation(next);
     setHistory((items) =>
       items.map((item) => (item.id === next.id ? next : item)),
@@ -481,7 +534,16 @@ export function ConversationView({
             </Button>
           </header>
           {!ready ? (
-            <Loading />
+            error && workspace.narrow && workspace.activePane === "quality" ? (
+              <ErrorBox error={error} onRetry={() => setReload((v) => v + 1)} />
+            ) : error ? (
+              <Empty
+                title="Оценка недоступна"
+                text="Не удалось загрузить выбранный запуск. Повторите загрузку диалога."
+              />
+            ) : (
+              <Loading />
+            )
           ) : (
             <>
               {evaluation?.provenance?.provider === "synthetic" && (
@@ -651,6 +713,7 @@ export function ConversationView({
                           <div className="criteria-table-heading" role="row">
                             <span role="columnheader">Критерий</span>
                             <span role="columnheader">Ответ</span>
+                            <span role="columnheader">Вес</span>
                             <span role="columnheader">Вклад /100</span>
                             <span role="columnheader" className="sr-only">
                               Апелляция
@@ -664,6 +727,19 @@ export function ConversationView({
                             const negative = flag
                               ? result.answer === true
                               : result.answer === false || result.answer === 0;
+                            const maximum =
+                              rule?.type === "scale"
+                                ? Math.max(
+                                    ...(rule.scale ?? []).map(
+                                      (point) => point.value,
+                                    ),
+                                  )
+                                : null;
+                            const partial =
+                              maximum !== null &&
+                              typeof result.answer === "number" &&
+                              result.answer > 0 &&
+                              result.answer < maximum;
                             const na =
                               result.applicability === "not_applicable";
                             return (
@@ -691,16 +767,26 @@ export function ConversationView({
                                 </div>
                                 <span
                                   role="cell"
-                                  className={`answer-badge ${na ? "na" : negative ? "negative" : flag ? "neutral" : "positive"}`}
+                                  className={`answer-badge ${na ? "na" : negative ? "negative" : partial ? "partial" : flag ? "neutral" : "positive"}`}
                                 >
                                   {na ? (
                                     <Minus size={12} />
                                   ) : negative ? (
                                     <CircleX size={12} />
+                                  ) : partial ? (
+                                    <CircleAlert size={12} />
                                   ) : (
                                     <CircleCheck size={12} />
                                   )}
-                                  <span>{answerLabel(result, rule)}</span>
+                                  <span>
+                                    {maximum !== null &&
+                                    typeof result.answer === "number"
+                                      ? `${result.answer}/${maximum}`
+                                      : answerLabel(result, rule)}
+                                  </span>
+                                </span>
+                                <span role="cell" className="criterion-weight">
+                                  {number(result.weight).replace(",00", "")}
                                 </span>
                                 <span role="cell" className="criterion-value">
                                   {flag ? (
