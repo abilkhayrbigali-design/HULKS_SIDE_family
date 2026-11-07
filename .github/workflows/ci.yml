@@ -37,6 +37,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm --prefix frontend ci
       - run: make check-web
+      - name: Install Chromium for workspace regression tests
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Exercise CQA workspace in Chromium
+        working-directory: frontend
+        run: npm run test:e2e
   full-application:
     runs-on: ubuntu-latest
     steps:

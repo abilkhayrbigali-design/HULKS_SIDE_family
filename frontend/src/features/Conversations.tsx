@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownToLine,
-  ArrowRight,
-  FileJson,
   MessageSquare,
   Phone,
   Plus,
   Search,
   Upload,
   X,
+  RefreshCw,
+  ListFilter,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+import { Button } from "../components/ui/button";
+import { ScrollArea } from "../components/ui/scroll-area";
+import { useWorkspace } from "../workspace/context";
 import { api, logFailure } from "../api/client";
 import type {
   Conversation,
@@ -55,28 +60,86 @@ export function normalizeImport(value: unknown): OrganizerRecord[] {
     );
   return records as OrganizerRecord[];
 }
-export function Conversations() {
-  const [page, setPage] = useState<Page<Conversation> | null>(null);
-  const [error, setError] = useState<unknown>();
-  const [loading, setLoading] = useState(true);
-  const [language, setLanguage] = useState("");
-  const [channel, setChannel] = useState("");
-  const [group, setGroup] = useState("");
-  const [search, setSearch] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [reload, setReload] = useState(0);
-  const [importOpen, setImportOpen] = useState(false);
-  const [summary, setSummary] = useState<ImportSummary | null>(null);
+type QueuePreferences = {
+  language: string;
+  channel: string;
+  group: string;
+  search: string;
+  offset: number;
+  filters: boolean;
+};
+const defaultQueuePreferences: QueuePreferences = {
+  language: "",
+  channel: "",
+  group: "",
+  search: "",
+  offset: 0,
+  filters: false,
+};
+function restoreQueuePreferences(): QueuePreferences {
+  try {
+    const value = JSON.parse(
+      sessionStorage.getItem("cqa.queue.preferences") ?? "null",
+    );
+    if (
+      value &&
+      ["", "RU", "KZ", "EN"].includes(value.language) &&
+      ["", "agent chat", "voice call"].includes(value.channel) &&
+      typeof value.group === "string" &&
+      typeof value.search === "string" &&
+      Number.isSafeInteger(value.offset) &&
+      value.offset >= 0 &&
+      typeof value.filters === "boolean"
+    )
+      return {
+        language: value.language,
+        channel: value.channel,
+        group: value.group,
+        search: value.search,
+        offset: value.offset,
+        filters: value.filters,
+      };
+  } catch {
+    /* A private browser may disable optional session preferences. */
+  }
+  return { ...defaultQueuePreferences };
+}
+let queuePreferences = restoreQueuePreferences();
+export function Conversations({ selectedId }: { selectedId: string | null }) {
+  const workspace = useWorkspace();
+  const [page, setPage] = useState<Page<Conversation> | null>(null),
+    [error, setError] = useState<unknown>();
+  const [loading, setLoading] = useState(true),
+    [language, setLanguage] = useState(queuePreferences.language),
+    [channel, setChannel] = useState(queuePreferences.channel),
+    [group, setGroup] = useState(queuePreferences.group),
+    [search, setSearch] = useState(queuePreferences.search),
+    [offset, setOffset] = useState(queuePreferences.offset),
+    [reload, setReload] = useState(0),
+    [importOpen, setImportOpen] = useState(false),
+    [summary, setSummary] = useState<ImportSummary | null>(null),
+    [filters, setFilters] = useState(queuePreferences.filters);
+  useEffect(() => {
+    queuePreferences = { language, channel, group, search, offset, filters };
+    try {
+      sessionStorage.setItem(
+        "cqa.queue.preferences",
+        JSON.stringify(queuePreferences),
+      );
+    } catch {
+      /* Keep in-memory navigation preferences. */
+    }
+  }, [language, channel, group, search, offset, filters]);
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError(undefined);
-    const q = new URLSearchParams({ limit: "25", offset: String(offset) });
-    if (language) q.set("language", language);
-    if (channel) q.set("channel", channel);
-    if (group.trim()) q.set("group_id", group.trim());
+    const query = new URLSearchParams({ limit: "25", offset: String(offset) });
+    if (language) query.set("language", language);
+    if (channel) query.set("channel", channel);
+    if (group.trim()) query.set("group_id", group.trim());
     api
-      .conversations(q.toString())
+      .conversations(query.toString())
       .then((result) => {
         if (active) setPage(result);
       })
@@ -89,104 +152,75 @@ export function Conversations() {
     return () => {
       active = false;
     };
-  }, [language, channel, group, offset, reload]);
+  }, [language, channel, group, offset, reload, workspace.queueRevision]);
   const filtered =
     page?.items.filter((c) =>
       c.external_id.toLowerCase().includes(search.toLowerCase()),
     ) ?? [];
+  const selectNext = (
+    event: React.KeyboardEvent<HTMLAnchorElement>,
+    index: number,
+  ) => {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? filtered.length - 1
+          : Math.max(
+              0,
+              Math.min(
+                filtered.length - 1,
+                index + (event.key === "ArrowDown" ? 1 : -1),
+              ),
+            );
+    const target = document.getElementById(`queue-item-${filtered[next]?.id}`);
+    target?.focus();
+    if (filtered[next])
+      location.hash = `/dialogues/${encodeURIComponent(filtered[next].id)}`;
+  };
   return (
-    <>
-      <section className="page-heading">
+    <section className="queue-content" aria-label="Очередь диалогов">
+      <header className="pane-heading queue-heading">
         <div>
-          <div className="eyebrow">КАЧЕСТВО КЛИЕНТСКОГО ОПЫТА</div>
           <h1>
-            Диалоги <span className="heading-count">{page?.total ?? "—"}</span>
+            Очередь <span className="heading-count">{page?.total ?? "—"}</span>
           </h1>
-          <p>От реплики к решению. Анализируйте диалоги по вашим правилам.</p>
+          <p>Диалоги для оценки</p>
         </div>
-        <button className="button primary" onClick={() => setImportOpen(true)}>
-          <Plus size={18} />
-          Импортировать диалоги
-        </button>
-      </section>
-      <section
-        className="overview-grid"
-        aria-label="Информация о рабочем процессе"
-      >
-        <div className="overview-card">
-          <div className="overview-icon">
-            <MessageSquare size={20} />
-          </div>
-          <div>
-            <span>Доступно в выборке</span>
-            <strong>
-              {page?.total ?? "—"} <small>диалогов</small>
-            </strong>
-          </div>
-        </div>
-        <div className="overview-card">
-          <div className="overview-icon pale">
-            <FileJson size={20} />
-          </div>
-          <div>
-            <span>Чаты и звонки</span>
-            <strong>
-              RU <i>·</i> KZ <i>·</i> EN
-            </strong>
-          </div>
-        </div>
-        <div className="overview-card feature">
-          <div>
-            <span>Проверяемые решения</span>
-            <strong>Оценка + доказательства</strong>
-            <small>Неизменяемые версии и история апелляций</small>
-          </div>
-          <ArrowRight size={22} />
-        </div>
-      </section>
-      {summary && (
-        <div className="success-box" role="status">
-          <div>
-            <strong>Импорт завершён · {summary.received} диалогов</strong>
-            <span>
-              Новых: {summary.created} · Новых версий: {summary.new_versions} ·
-              Без изменений: {summary.unchanged}
-            </span>
-          </div>
-          <button
-            className="icon-button"
-            aria-label="Скрыть результат импорта"
-            onClick={() => setSummary(null)}
-          >
-            <X size={17} />
-          </button>
-        </div>
-      )}
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Все диалоги</h2>
-            <p>Выберите диалог, чтобы изучить переписку и запустить оценку.</p>
-          </div>
-          <button
-            className="button subtle small"
+        <div className="queue-tools">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Обновить очередь"
             onClick={() => setReload((v) => v + 1)}
           >
-            Обновить
-          </button>
+            <RefreshCw size={15} />
+          </Button>
+          <Button
+            variant="default"
+            size="icon-sm"
+            aria-label="Импортировать диалоги"
+            onClick={() => setImportOpen(true)}
+          >
+            <Plus size={17} />
+          </Button>
         </div>
-        <div className="filters">
-          <label className="search-field">
-            <Search size={17} />
-            <input
-              aria-label="Поиск ID на странице"
-              placeholder="Поиск по ID на странице"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </label>
-          <label className="filter-field">
-            <span>Язык</span>
+      </header>
+      <div className="queue-filters">
+        <label className="search-field">
+          <Search size={15} />
+          <input
+            aria-label="Поиск ID на странице"
+            placeholder="Найти диалог на странице"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </label>
+        <div className="queue-filter-row">
+          <label>
+            <span className="sr-only">Язык</span>
             <select
               aria-label="Язык"
               value={language}
@@ -196,169 +230,162 @@ export function Conversations() {
               }}
             >
               <option value="">Все языки</option>
-              {["RU", "KZ", "EN"].map((x) => (
-                <option key={x}>{x}</option>
+              {["RU", "KZ", "EN"].map((v) => (
+                <option key={v}>{v}</option>
               ))}
             </select>
           </label>
-          <label className="filter-field">
-            <span>Канал</span>
-            <select
-              aria-label="Канал"
-              value={channel}
-              onChange={(e) => {
-                setChannel(e.target.value);
-                setOffset(0);
-              }}
-            >
-              <option value="">Все каналы</option>
-              <option value="agent chat">Чат</option>
-              <option value="voice call">Звонок</option>
-            </select>
-          </label>
-          <label className="filter-field">
-            <span>Группа</span>
-            <input
-              aria-label="Группа"
-              placeholder="Все группы"
-              value={group}
-              onChange={(e) => {
-                setGroup(e.target.value);
-                setOffset(0);
-              }}
-            />
-          </label>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-pressed={filters}
+            onClick={() => setFilters(!filters)}
+          >
+            <ListFilter size={14} />
+            Фильтры{(channel || group) && <span className="filter-dot" />}
+          </Button>
         </div>
+        {filters && (
+          <div className="queue-extra-filters">
+            <label className="field">
+              Канал
+              <select
+                aria-label="Канал"
+                value={channel}
+                onChange={(e) => {
+                  setChannel(e.target.value);
+                  setOffset(0);
+                }}
+              >
+                <option value="">Все каналы</option>
+                <option value="agent chat">Чат</option>
+                <option value="voice call">Звонок</option>
+              </select>
+            </label>
+            <label className="field">
+              Группа
+              <input
+                aria-label="Группа"
+                value={group}
+                placeholder="Все группы"
+                onChange={(e) => {
+                  setGroup(e.target.value);
+                  setOffset(0);
+                }}
+              />
+            </label>
+          </div>
+        )}
+      </div>
+      {summary && (
+        <div className="success-box" role="status">
+          <div>
+            <strong>Импорт завершён · {summary.received}</strong>
+            <span>
+              Новых {summary.created} · версий {summary.new_versions} · без
+              изменений {summary.unchanged}
+            </span>
+          </div>
+          <button
+            className="icon-button"
+            aria-label="Скрыть результат импорта"
+            onClick={() => setSummary(null)}
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
+      <ScrollArea className="queue-scroll" aria-label="Список диалогов">
         {loading ? (
           <Loading />
         ) : error ? (
           <ErrorBox error={error} onRetry={() => setReload((v) => v + 1)} />
         ) : filtered.length === 0 ? (
           <Empty
-            title={
-              page?.total
-                ? "По этим условиям ничего нет"
-                : "Начните с первого диалога"
-            }
+            title={page?.total ? "Ничего не найдено" : "Первый диалог"}
             text={
               page?.total
-                ? "Измените фильтры или строку поиска."
-                : "Импортируйте набор по группе или загрузите JSON с транскриптами."
+                ? "Измените фильтры или поиск."
+                : "Импортируйте группу или JSON с транскриптами."
             }
           >
-            <button
-              className="button primary"
-              onClick={() => setImportOpen(true)}
-            >
-              <Upload size={17} />
+            <Button size="sm" onClick={() => setImportOpen(true)}>
+              <Upload size={15} />
               Импортировать
-            </button>
+            </Button>
           </Empty>
         ) : (
-          <>
-            <div className="table-scroll">
-              <table className="conversations-table">
-                <thead>
-                  <tr>
-                    <th>ДИАЛОГ</th>
-                    <th>КАНАЛ / ЯЗЫК</th>
-                    <th>ГРУППА</th>
-                    <th>СТАТУС</th>
-                    <th>ИТОГ</th>
-                    <th>
-                      <span className="sr-only">Открыть</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((c) => (
-                    <tr key={c.id}>
-                      <td>
-                        <a
-                          href={`#/dialogues/${encodeURIComponent(c.id)}`}
-                          className="conversation-title"
-                        >
-                          {c.external_id}
-                        </a>
-                        <small>
-                          {c.message_count} реплик ·{" "}
-                          {c.source === "dataset"
-                            ? "Набор данных"
-                            : "Загружен JSON"}
-                        </small>
-                      </td>
-                      <td>
-                        <div className="channel">
-                          {c.channel === "voice call" ? (
-                            <Phone size={15} />
-                          ) : (
-                            <MessageSquare size={15} />
-                          )}{" "}
-                          {c.channel === "voice call" ? "Звонок" : "Чат"}
-                          <span className="language-tag">{c.language}</span>
-                        </div>
-                      </td>
-                      <td>
-                        <span className="group-tag">{c.group_id}</span>
-                      </td>
-                      <td>
-                        {c.latest_evaluation ? (
-                          <StatusBadge status={c.latest_evaluation.status} />
-                        ) : (
-                          <span className="badge neutral">Не оценён</span>
-                        )}
-                      </td>
-                      <td>
-                        <strong className="score-cell">
-                          {number(c.latest_evaluation?.final_total)}
-                          <small>/ 100</small>
-                        </strong>
-                      </td>
-                      <td>
-                        <a
-                          className="icon-link"
-                          aria-label={`Открыть ${c.external_id}`}
-                          href={`#/dialogues/${encodeURIComponent(c.id)}`}
-                        >
-                          <ArrowRight size={18} />
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="pagination">
-              <span>
-                {offset + 1}–
-                {Math.min(offset + (page?.items.length ?? 0), page?.total ?? 0)}{" "}
-                из {page?.total}
-              </span>
-              <div>
-                <button
-                  className="button small"
-                  disabled={offset === 0}
-                  onClick={() => setOffset(Math.max(0, offset - 25))}
-                >
-                  Назад
-                </button>
-                <button
-                  className="button small"
-                  disabled={offset + 25 >= (page?.total ?? 0)}
-                  onClick={() => setOffset(offset + 25)}
-                >
-                  Далее
-                </button>
-              </div>
-            </div>
-          </>
+          <div className="queue-list">
+            {filtered.map((c, index) => (
+              <a
+                className={`queue-item ${c.id === selectedId ? "is-selected" : ""}`}
+                aria-current={c.id === selectedId ? "page" : undefined}
+                href={`#/dialogues/${encodeURIComponent(c.id)}`}
+                id={`queue-item-${c.id}`}
+                key={c.id}
+                onKeyDown={(event) => selectNext(event, index)}
+              >
+                <div className="queue-item-top">
+                  <span className="queue-channel">
+                    {c.channel === "voice call" ? (
+                      <Phone size={14} />
+                    ) : (
+                      <MessageSquare size={14} />
+                    )}
+                    <span>{c.external_id}</span>
+                  </span>
+                  <span className="language-tag">{c.language}</span>
+                </div>
+                <div className="queue-item-summary">
+                  <span>
+                    {c.message_count} реплик · {c.group_id}
+                  </span>
+                  <span>
+                    {c.latest_evaluation
+                      ? number(c.latest_evaluation.final_total)
+                      : "—"}
+                  </span>
+                </div>
+                <div className="queue-item-bottom">
+                  {c.latest_evaluation ? (
+                    <StatusBadge status={c.latest_evaluation.status} />
+                  ) : (
+                    <span className="badge neutral">Не оценён</span>
+                  )}
+                  <span>{c.source === "dataset" ? "Набор" : "JSON"}</span>
+                </div>
+              </a>
+            ))}
+          </div>
         )}
-      </section>
-      <div className="hint-line">
-        <span className="mini-dot" />
-        Баллы рассчитываются на сервере по выбранной версии чек-листа. N/A
-        исключается из применимых весов.
-      </div>
+      </ScrollArea>
+      <footer className="queue-pagination">
+        <span>
+          {page?.total
+            ? `${offset + 1}–${Math.min(offset + (page?.items.length ?? 0), page.total)} / ${page.total}`
+            : "0 диалогов"}
+        </span>
+        <div>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Предыдущая страница"
+            disabled={offset === 0}
+            onClick={() => setOffset(Math.max(0, offset - 25))}
+          >
+            <ChevronLeft size={16} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Следующая страница"
+            disabled={offset + 25 >= (page?.total ?? 0)}
+            onClick={() => setOffset(offset + 25)}
+          >
+            <ChevronRight size={16} />
+          </Button>
+        </div>
+      </footer>
       {importOpen && (
         <ImportDialog
           onClose={() => setImportOpen(false)}
@@ -367,10 +394,11 @@ export function Conversations() {
             setImportOpen(false);
             setOffset(0);
             setReload((v) => v + 1);
+            workspace.refreshQueue();
           }}
         />
       )}
-    </>
+    </section>
   );
 }
 function ImportDialog({
