@@ -98,6 +98,54 @@ def test_failure_and_missing_do_not_improve_accuracy_or_fabricate_usage():
     assert missing["criteria"]["greeting_custom"]["missing"] == 1
 
 
+@pytest.mark.parametrize("failed", [False, True])
+def test_missing_prediction_keeps_split_usage_partially_unknown(failed):
+    labels, predictions = documents()
+    missing = copy.deepcopy(labels["cases"][0])
+    missing["case_id"] = "synthetic-missing"
+    missing["transcript"].update(
+        id="00000000-0000-4000-8000-000000000030",
+        conversation_id="00000000-0000-4000-8000-000000000031",
+    )
+    labels["cases"].append(missing)
+    usage = {
+        "request_count": 1,
+        "input_tokens": 100,
+        "output_tokens": 20,
+        "total_tokens": 120,
+        "cached_input_tokens": 0,
+        "reasoning_output_tokens": 0,
+    }
+    prediction = predictions["cases"][0]
+    prediction["result"]["usage"] = usage
+    if failed:
+        prediction.update(
+            result=None,
+            error_code="AI_INCOMPLETE",
+            failure_provenance={
+                "provider": "openai",
+                "model_requested": "gpt-6-luna",
+                "model_reported": "gpt-6-luna",
+                "prompt_version": "synthetic",
+                "duration_ms": 3000,
+                "usage": usage,
+                "estimated_cost_usd": 0.01,
+            },
+        )
+    report = compare_predictions(labels, predictions, split="tune")
+    for aggregate in (
+        report["overall"],
+        report["languages"]["RU"],
+        report["channels"]["agent chat"],
+    ):
+        assert aggregate["cases"] == 2
+        assert aggregate["missing"] == 1
+        assert aggregate["usage"]["request_count_known"] == 1
+        assert aggregate["usage"]["unrecorded_usage_cases"] == 1
+        assert all(aggregate["usage"][field] is None for field in usage if field != "request_count")
+        assert aggregate["estimated_cost_usd"] is None
+
+
 def test_explicit_holdout_split_and_no_conversation_leakage():
     labels, predictions = documents()
     holdout = copy.deepcopy(labels["cases"][0])
