@@ -229,25 +229,39 @@ export function ConversationView({
       active = false;
     };
   }, [checklistId, reload]);
+  const ready =
+    !loading &&
+    !error &&
+    conversation?.id === id &&
+    loadedContext === requestContext;
   const polling =
     !!evaluation && ["running", "queued"].includes(evaluation.status);
   useEffect(() => {
-    if (!evaluation || !polling || evaluation.conversation_id !== id) return;
+    if (
+      !ready ||
+      !evaluation ||
+      !polling ||
+      evaluation.conversation_id !== id ||
+      (evaluationId && evaluation.id !== evaluationId)
+    )
+      return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
         const next = await api.evaluation(evaluation.id, true);
-        if (active) {
+        if (active && isCurrent()) {
           setEvaluation(next);
           setHistory((items) =>
             items.map((e) => (e.id === next.id ? next : e)),
           );
           if (["running", "queued"].includes(next.status))
             timer = setTimeout(poll, 2000);
+          else if (["completed", "failed"].includes(next.status))
+            workspace.refreshQueue();
         }
       } catch (e) {
-        if (active) {
+        if (active && isCurrent()) {
           const failure =
             e instanceof ApiError ? e : new ApiError(0, "NETWORK_ERROR");
           logFailure(failure.status, failure.code);
@@ -260,7 +274,7 @@ export function ConversationView({
       active = false;
       clearTimeout(timer);
     };
-  }, [id, evaluationId, evaluation?.id, polling, reload]);
+  }, [id, evaluationId, evaluation?.id, polling, reload, ready, requestContext]);
   const rememberReadingPosition = () => {
     const viewport = transcriptRoot.current?.querySelector<HTMLElement>(
       '[data-slot="scroll-area-viewport"]',
@@ -407,11 +421,6 @@ export function ConversationView({
       if (isCurrent()) setBusy(false);
     }
   };
-  const ready =
-    !loading &&
-    !error &&
-    conversation?.id === id &&
-    loadedContext === requestContext;
   const final = ready ? evaluation?.final : null;
   const original = ready ? evaluation?.original : null;
   const criterion =
