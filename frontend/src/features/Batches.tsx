@@ -210,7 +210,7 @@ function BatchProgress({ batch }: { batch: EvaluationBatch }) {
       <Button variant="outline" disabled={!finished || !batch.failed || state.busy} onClick={() => void state.retryFailed()}>
         <RefreshCw size={15} />{state.busy ? "Создаём повтор…" : `Повторить ошибки · ${batch.failed}`}
       </Button>
-      <p className="muted">Повтор создаст новый пакет только для ошибок, сохранив исходные снимки. Это новый запуск AI.</p>
+      <p className="muted">Новый пакет сохранит успешные оценки и повторит только ошибки по исходным снимкам. Новые вызовы AI нужны только для ошибок; экспорт сохранит полный набор.</p>
     </div>
     <div className="batch-items" role="list" aria-label="Результаты пакета">
       {batch.items.map((item, i) => <div role="listitem" key={item.evaluation_id}>

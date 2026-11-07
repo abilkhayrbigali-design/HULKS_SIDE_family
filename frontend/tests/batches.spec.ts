@@ -45,8 +45,13 @@ async function setup(page: Page, count = 101) {
     if (path.endsWith("/retry-failed")) {
       const source = s.batches.find((b) => path.includes(b.id))!;
       s.retries.push(source.id);
-      const child = makeBatch(3001, source.items.filter((item) => item.status === "failed").map((item) => item.conversation_id), id(4001));
+      const child = makeBatch(3001, source.items.map((item) => item.conversation_id), id(4001));
       child.source_batch_id = source.id;
+      child.completed = source.completed;
+      child.queued = source.failed;
+      child.items = source.items.map((item, index) => item.status === "completed" ? item : {
+        ...item, evaluation_id: id(7000 + index), status: "queued", error_code: null,
+      });
       s.batches.unshift(child);
       return route.fulfill({ status: 202, json: child });
     }
@@ -108,9 +113,15 @@ test("full scope, explicit launch, retained progress, failed-only retry and save
   expect(s.exports).toEqual([{ batch_id: id(3000), team_name: "HULK’S FAMILY" }]);
   expect(s.creates).toHaveLength(1);
   await page.getByRole("button", { name: "Повторить ошибки · 2", exact: true }).click();
-  await expect(page.locator(".batch-counts")).toContainText("Всего2");
+  await expect(page.locator(".batch-counts")).toContainText("Всего101");
+  await expect(page.locator(".batch-counts")).toContainText("В очереди2");
+  await expect(page.locator(".batch-counts")).toContainText("Готово99");
   expect(s.retries).toEqual([id(3000)]);
   expect(s.batches[0].source_batch_id).toBe(id(3000));
+  expect(s.batches[0].items.slice(2)).toEqual(s.batches[1].items.slice(2));
+  expect(s.batches[1].failed).toBe(2);
+  expect(s.batches[0].items[0].transcript_version_id).toBe(s.batches[1].items[0].transcript_version_id);
+  expect(s.batches[0].items[0].evaluation_id).not.toBe(s.batches[1].items[0].evaluation_id);
   await expect(page.getByRole("button", { name: "Скачать results.json", exact: true })).toBeDisabled();
 });
 
