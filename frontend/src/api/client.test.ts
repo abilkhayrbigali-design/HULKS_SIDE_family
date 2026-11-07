@@ -82,4 +82,9 @@ describe("safe API boundary", () => {
     expect(await allPages(load)).toEqual([1, 2, 3, 4, 5]);
     expect(load.mock.calls.map((x) => x[0])).toEqual([0, 2, 4]);
   });
+  it("keeps fixed actionable batch and export conflict messages", () => {
+    expect(new ApiError(409, "SUBMISSION_CHECKLIST_INCOMPATIBLE").message).toContain("несовместим");
+    expect(new ApiError(409, "BATCH_NOT_FINISHED").message).toContain("ещё обрабатывается");
+    expect(new ApiError(409, "PRIVATE_CODE").message).not.toContain("PRIVATE_CODE");
+  });
 });

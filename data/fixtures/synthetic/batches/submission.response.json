@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0",
+  "team_name": "Synthetic CQA team",
+  "model": {
+    "mode": "external_api",
+    "name": "synthetic-provider"
+  },
+  "results": [
+    {
+      "conversation_id": "synthetic-batch-001",
+      "status": "ok",
+      "criteria": [
+        {
+          "criterion_id": "contact",
+          "value": true,
+          "rationale": "Собственный синтетический пример структуры.",
+          "evidence_turns": [
+            1
+          ]
+        },
+        {
+          "criterion_id": "discovery",
+          "value": null,
+          "rationale": "Собственный синтетический пример структуры.",
+          "evidence_turns": [
+            1
+          ]
+        },
+        {
+          "criterion_id": "identification",
+          "value": null,
+          "rationale": "Собственный синтетический пример структуры.",
+          "evidence_turns": [
+            1
+          ]
+        },
+        {
+          "criterion_id": "consultation",
+          "value": 20,
+          "rationale": "Собственный синтетический пример структуры.",
+          "evidence_turns": [
+            1
+          ]
+        },
+        {
+          "criterion_id": "empathy",
+          "value": true,
+          "rationale": "Собственный синтетический пример структуры.",
+          "evidence_turns": [
+            1
+          ]
+        },
+        {
+          "criterion_id": "dialogue",
+          "value": 10,
+          "rationale": "Собственный синтетический пример структуры.",
+          "evidence_turns": [
+            1
+          ]
+        },
+        {
+          "criterion_id": "closure",
+          "value": true,
+          "rationale": "Собственный синтетический пример структуры.",
+          "evidence_turns": [
+            1
+          ]
+        },
+        {
+          "criterion_id": "critical",
+          "value": false,
+          "rationale": "Собственный синтетический пример структуры.",
+          "evidence_turns": [
+            1
+          ]
+        }
+      ],
+      "score": {
+        "final_score": 100,
+        "critical_flag": false
+      }
+    },
+    {
+      "conversation_id": "synthetic-batch-002",
+      "status": "error",
+      "criteria": [],
+      "score": null,
+      "error": "AI_TIMEOUT"
+    }
+  ]
+}

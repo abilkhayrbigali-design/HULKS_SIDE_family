@@ -147,6 +147,9 @@ def _aggregate(cases, predictions) -> dict:
         actual = None
         if predicted is None:
             missing += 1
+            # An absent prediction does not establish that no paid calls were made.
+            usage_rows.append(None)
+            costs.append(None)
         elif predicted.result is None:
             failed += 1
             if predicted.failure_provenance:

@@ -151,6 +151,31 @@ export interface Evaluation {
   provenance: Provenance | null;
   error: SafeError | null;
 }
+export interface BatchCreate {
+  request_id: string;
+  conversation_ids: string[];
+  checklist_version_id: string;
+}
+export interface EvaluationBatch {
+  id: string;
+  request_id: string;
+  source_batch_id: string | null;
+  checklist_version_id: string;
+  created_at: string;
+  status: "queued" | "running" | "completed" | "completed_with_errors";
+  total: number;
+  queued: number;
+  running: number;
+  completed: number;
+  failed: number;
+  items: {
+    conversation_id: string;
+    transcript_version_id: string;
+    evaluation_id: string;
+    status: Status;
+    error_code: string | null;
+  }[];
+}
 export interface ProviderCriterionResult {
   criterion_id: string;
   applicability: "applicable" | "not_applicable";

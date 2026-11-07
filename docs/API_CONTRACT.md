@@ -235,3 +235,65 @@ ProviderResult: `{ criterion_results, provider, model_requested, model_reported,
 - Абулхаир фиксирует синтетические контрактные примеры в A-02 и проверяет сквозную совместимость.
 - Новое поле по возможности добавляется совместимо. Переименование/удаление поля требует общей правки документов, клиента, сервера и проверок в согласованном порядке.
 - Декларативный контракт не является готовым сервером. Согласованные маршруты должны быть подтверждены первым работающим сквозным сценарием A-03.
+
+## 6. Пакетная оценка и официальный экспорт (D-023/D-024)
+
+Пакет использует существующий worker и не меняет единичный evaluation API.
+Все операции ниже работают с сохранёнными версиями; экспорт не вызывает AI.
+
+| Метод и путь | Поведение |
+| --- | --- |
+| `POST /evaluation-batches` | `{request_id, conversation_ids, checklist_version_id}` →202 `EvaluationBatch` |
+| `GET /evaluation-batches` | `limit/offset` →`Page[EvaluationBatch]`, новые первыми |
+| `GET /evaluation-batches/{id}` | Текущее состояние всех сохранённых запусков пакета |
+| `POST /evaluation-batches/{id}/retry-failed` | Без body; после завершения создаёт/возвращает дочерний пакет полного состава; новые задания только failed |
+| `POST /submission-exports` | `{batch_id, team_name}` →200 официальный JSON 1.0, `Content-Disposition: attachment; filename="results.json"` |
+
+Создание требует настроенного AI, как одиночный запуск; тестовая Python-инъекция
+остаётся только тестовой. `request_id` — UUID, `conversation_ids` — от1 до1000
+уникальных UUID. Сервер атомарно проверяет весь набор и фиксирует текущую версию
+каждого транскрипта и выбранную версию чек-листа. Один request_id повторяет тот же
+пакет; несовместимое содержимое даёт409 `IDEMPOTENCY_CONFLICT`. Клиент сохраняет
+ключ одной операции при транспортном повторе; изменение состава — новая операция.
+
+`EvaluationBatch`: `id`, `request_id`, nullable `source_batch_id`,
+`checklist_version_id`, `created_at`, `status`, числовые `total/queued/running/completed/failed`,
+`items`. Элемент: `conversation_id`, `transcript_version_id`, `evaluation_id`,
+`status` единичной оценки и nullable `error_code`. Счётчики вычисляются по сохранённым
+оценкам, их сумма равна total. Статус — `queued`, `running`, `completed` либо
+`completed_with_errors`; завершённость не означает правильности ответов модели.
+
+Повтор ошибок разрешён только для завершённого пакета с failed. Дочерний пакет
+сохраняет полный состав и исходные transcript/checklist snapshots: completed
+evaluations переиспользуются, новые создаются только для failed. Исходный пакет
+не переписывается. Поэтому экспорт ребёнка после повтора содержит весь набор,
+а не только диалоги последней попытки. Повтор одного retry возвращает сохранённого ребёнка, не оплачивает ещё
+одну незаметную попытку. Перезапуск приложения использует имеющуюся recovery policy:
+queued продолжаются, running получают failed/INTERRUPTED.
+
+Экспорт принимает непустой team_name после strip, максимум200 символов. Один
+batch должен соответствовать одному набору сдачи; UI показывает весь выбранный
+состав и число диалогов, независимо от25 строк текущей страницы. Сервер не добавляет
+пропущенные диалоги и не утверждает, что выбран весь выданный организаторами набор.
+Повторяющиеся исходные external IDs отклоняются409. Пользователь сохраняет файл
+локально; приложение не делает commit/push и не выгружает частные данные автоматически.
+
+Формат проверен по `CQA_Student_Guide_Appendix_Results.pdf`, стр.2–3:
+`{schema_version:"1.0", team_name, model:{mode,name}, results:[...]}`.
+Успех: `{conversation_id,status:"ok",criteria,score:{final_score,critical_flag}}`.
+Каждый из восьми критериев ровно один раз:
+`{criterion_id,value,rationale,evidence_turns}`; value — ответ до применения веса.
+Mapping: `needs→discovery`, `management→dialogue`, `closing→closure`,
+`gross_errors→critical`, остальные ID совпадают. evidence_turns — однобазовые
+позиции всех исходных сообщений frozen версии; диапазон раскрывается включительно.
+Цитаты из другой версии/несуществующие ссылки не подставляются.
+
+Экспортируется `original`, никогда `final` после апелляций. Применим только
+совместимый исходный seed-чек-лист; пользовательские инструкции, шкалы, веса и
+условия N/A не выдаются за исходную рубрику. Несовместимость →409
+`SUBMISSION_CHECKLIST_INCOMPATIBLE`. Pending/running, failed и completed с
+review_required дают `{conversation_id,status:"error",criteria:[],score:null,error:FIXED_CODE}`,
+без потери ID и фиктивного нулевого балла. model.name берётся из provenance
+реальных попыток; если попыток нет — `not_run`. Это явное отсутствие запуска,
+а не название измеренной модели. Ограничение проверки: offline synthetic provider;
+человеческая точность и новый live-прогон не заявляются.

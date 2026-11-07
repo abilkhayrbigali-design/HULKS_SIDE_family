@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from sqlalchemy import select
 
+from app.api.batches import require_ai
 from app.api.routes.data import DB, Limit, Offset, page
 from app.models.evaluations import Appeal, Evaluation
 from app.schemas import responses
@@ -16,20 +17,13 @@ from app.schemas.evaluations import (
     Status,
 )
 from app.services import evaluations
-from app.services.errors import ServiceError
 
 router = APIRouter(prefix="/api/v1")
 
 
 @router.post("/evaluations", status_code=202, response_model=responses.Evaluation)
 def create_evaluation(payload: EvaluationCreate, request: Request, db: DB):
-    # Injection is available only to Python tests, never through a product setting/HTTP flag.
-    if not getattr(request.app.state, "evaluation_pipeline_injected", False):
-        settings = request.app.state.settings
-        if not settings.openai_api_key.get_secret_value().strip():
-            raise ServiceError(
-                503, "AI_NOT_CONFIGURED", "Добавьте OPENAI_API_KEY для запуска AI-оценки"
-            )
+    require_ai(request)
     return evaluations.create(db, payload)
 
 
@@ -98,4 +92,7 @@ def decide_appeal(id: UUID, payload: DecisionCreate, db: DB):
 
 
 def install_evaluation_api(app):
+    from app.api.batches import router as batch_router
+
     app.include_router(router)
+    app.include_router(batch_router)

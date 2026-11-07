@@ -50,6 +50,14 @@ def session_factory(engine):
             count = session.info.pop(key, 0)
             if count:
                 logging.getLogger("cqa.evaluation").info("event=%s records=%d", event_name, count)
+        count = session.info.pop("cqa_batch_saved", 0)
+        if count:
+            logging.getLogger("cqa.batches").info("event=evaluation_batch_saved records=%d", count)
+        exported = session.info.pop("cqa_submission_exported", None)
+        if exported is not None:
+            logging.getLogger("cqa.submissions").info(
+                "event=submission_export_completed records=%d failed=%d", *exported
+            )
 
     @event.listens_for(factory, "after_rollback")
     def discard_saved_operations(session):
@@ -57,5 +65,7 @@ def session_factory(engine):
         session.info.pop("cqa_checklist_versions", None)
         for key in ("cqa_evaluation_queued", "cqa_appeal_created", "cqa_appeal_decided"):
             session.info.pop(key, None)
+        session.info.pop("cqa_batch_saved", None)
+        session.info.pop("cqa_submission_exported", None)
 
     return factory

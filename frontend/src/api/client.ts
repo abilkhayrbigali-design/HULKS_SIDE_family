@@ -1,5 +1,6 @@
 import type {
   Appeal,
+  BatchCreate,
   ChecklistDetail,
   ChecklistSummary,
   ChecklistVersion,
@@ -8,6 +9,7 @@ import type {
   Criterion,
   Decision,
   Evaluation,
+  EvaluationBatch,
   ImportSummary,
   OrganizerRecord,
   Page,
@@ -58,6 +60,16 @@ const messages: Record<string, string> = {
   API_ERROR: "Операция не выполнена. Повторите действие или проверьте сервер.",
   INTERNAL_ERROR: "Внутренняя ошибка сервера. Изменения не подтверждены.",
   INTERRUPTED: "Оценка прервана перезапуском сервера. Создайте новый запуск.",
+  IDEMPOTENCY_CONFLICT:
+    "Этот запрос запуска уже сохранён с другим составом. Подготовьте новый набор.",
+  BATCH_NOT_FINISHED: "Пакет ещё обрабатывается. Дождитесь завершения.",
+  BATCH_NO_FAILED_ITEMS: "В этом пакете нет ошибок для повторной оценки.",
+  SUBMISSION_CHECKLIST_INCOMPATIBLE:
+    "Выбранный чек-лист несовместим с официальным форматом. Используйте версию с исходными критериями и шкалами.",
+  SUBMISSION_DUPLICATE_CONVERSATION_ID:
+    "В наборе повторяются внешние ID диалогов. Подготовьте набор одной группы без повторяющихся ID.",
+  EVALUATION_REVIEW_REQUIRED: "Оценка требует ручной проверки.",
+  EVALUATION_PENDING: "Оценка ещё не завершена.",
 };
 export const safeCode = (code: unknown) =>
   typeof code === "string" && Object.hasOwn(messages, code)
@@ -69,7 +81,7 @@ export class ApiError extends Error {
   code: string;
   constructor(status: number, code: unknown) {
     const safe = safeCode(code);
-    super(status === 409 ? messages.CONFLICT : errorMessage(safe));
+    super(errorMessage(safe));
     this.status = status;
     this.code = safe;
   }
@@ -150,6 +162,16 @@ export const api = {
     request<Evaluation>(`/evaluations/${encodeURIComponent(id)}`, {}, quiet),
   evaluate: (conversation_id: string, checklist_version_id: string) =>
     post<Evaluation>("/evaluations", { conversation_id, checklist_version_id }),
+  batches: (offset = 0) =>
+    request<Page<EvaluationBatch>>(`/evaluation-batches?limit=100&offset=${offset}`),
+  batch: (id: string) =>
+    request<EvaluationBatch>(`/evaluation-batches/${encodeURIComponent(id)}`),
+  createBatch: (body: BatchCreate) =>
+    post<EvaluationBatch>("/evaluation-batches", body),
+  retryBatch: (id: string) =>
+    post<EvaluationBatch>(`/evaluation-batches/${encodeURIComponent(id)}/retry-failed`, {}),
+  submissionExport: (batch_id: string, team_name: string) =>
+    post<unknown>("/submission-exports", { batch_id, team_name }),
   appeals: (id: string, offset = 0) =>
     request<Page<Appeal>>(
       `/appeals?evaluation_id=${encodeURIComponent(id)}&limit=100&offset=${offset}`,

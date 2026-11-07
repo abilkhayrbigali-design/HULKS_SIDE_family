@@ -3,6 +3,7 @@ import {
   CheckCheck,
   ClipboardList,
   Inbox,
+  Layers,
   Menu,
   Moon,
   PanelLeftClose,
@@ -34,7 +35,9 @@ import type { Layout } from "react-resizable-panels";
 import { Conversations } from "./features/Conversations";
 import { ConversationView } from "./features/ConversationView";
 import { Checklists } from "./features/Checklists";
+import { Batches } from "./features/Batches";
 import { WorkspaceProvider, useWorkspace } from "./workspace/context";
+import { BatchProvider } from "./workspace/batches";
 import { Empty } from "./ui";
 function route() {
   const [path, query = ""] = location.hash.replace(/^#/, "").split("?");
@@ -80,10 +83,12 @@ export function App() {
   }, [theme]);
   const id = current.path.match(/^\/dialogues\/([^/]+)$/)?.[1];
   const checklist = current.path === "/checklists";
-  const dialogueLink = checklist ? lastWorkspace : "#/dialogues";
+  const batches = current.path === "/batches";
+  const documentPage = checklist || batches;
+  const dialogueLink = documentPage ? lastWorkspace : "#/dialogues";
   const navigation = (
     <>
-      <a className={!checklist ? "active" : ""} href={dialogueLink}>
+      <a className={!documentPage ? "active" : ""} href={dialogueLink}>
         <Inbox size={18} />
         <span>Диалоги</span>
       </a>
@@ -91,11 +96,16 @@ export function App() {
         <ClipboardList size={18} />
         <span>Чек-листы</span>
       </a>
+      <a className={batches ? "active" : ""} href="#/batches">
+        <Layers size={18} />
+        <span>Пакетная оценка</span>
+      </a>
     </>
   );
   return (
     <TooltipProvider delayDuration={350}>
       <WorkspaceProvider>
+        <BatchProvider>
         <div className="app-shell">
           <a
             href="#main"
@@ -148,8 +158,9 @@ export function App() {
             </a>
             <nav>
               {[
-                ["Диалоги", dialogueLink, Inbox, !checklist],
+                ["Диалоги", dialogueLink, Inbox, !documentPage],
                 ["Чек-листы", "#/checklists", ClipboardList, checklist],
+                ["Пакетная оценка", "#/batches", Layers, batches],
               ].map(([label, href, Icon, active]) => {
                 const Glyph = Icon as typeof Inbox;
                 return (
@@ -188,11 +199,13 @@ export function App() {
           </Sheet>
           <main
             id="main"
-            className={checklist ? "document-page" : "workspace-page"}
+            className={documentPage ? "document-page" : "workspace-page"}
             tabIndex={-1}
           >
             {checklist ? (
               <Checklists />
+            ) : batches ? (
+              <Batches />
             ) : (
               <Workspace
                 id={id ? decodeURIComponent(id) : null}
@@ -201,6 +214,7 @@ export function App() {
             )}
           </main>
         </div>
+        </BatchProvider>
       </WorkspaceProvider>
     </TooltipProvider>
   );
