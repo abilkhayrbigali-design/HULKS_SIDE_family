@@ -1,0 +1,35 @@
+{
+  "id": "71000000-0000-4000-8000-000000000032",
+  "conversation_id": "71000000-0000-4000-8000-000000000001",
+  "transcript_version_id": "71000000-0000-4000-8000-000000000012",
+  "checklist_version_id": "71000000-0000-4000-8000-000000000022",
+  "status": "failed",
+  "revision": 0,
+  "created_at": "2026-11-08T05:20:00Z",
+  "completed_at": "2026-11-08T05:20:10Z",
+  "original": null,
+  "final": null,
+  "review_required": false,
+  "review_reasons": [],
+  "provenance": {
+    "provider": "synthetic",
+    "model_requested": "synthetic-manual-workspace",
+    "model_reported": null,
+    "prompt_version": "fixture-only-v1",
+    "duration_ms": 0,
+    "usage": {
+      "request_count": 2,
+      "input_tokens": null,
+      "output_tokens": null,
+      "total_tokens": null,
+      "cached_input_tokens": null,
+      "reasoning_output_tokens": null
+    },
+    "estimated_cost_usd": null
+  },
+  "error": {
+    "code": "AI_TIMEOUT",
+    "message": "Synthetic timeout for offline UI verification.",
+    "details": []
+  }
+}

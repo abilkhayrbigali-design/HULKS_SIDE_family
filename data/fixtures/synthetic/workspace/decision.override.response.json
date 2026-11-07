@@ -1,0 +1,580 @@
+{
+  "appeal": {
+    "id": "71000000-0000-4000-8000-000000000042",
+    "evaluation_id": "71000000-0000-4000-8000-000000000031",
+    "criterion_id": "next_step",
+    "comment": "Учебное обращение 2: проверьте следующий шаг в m0017.",
+    "status": "resolved",
+    "base_revision": 1,
+    "current_revision": 2,
+    "created_at": "2026-11-08T05:13:00Z",
+    "decision": {
+      "id": "71000000-0000-4000-8000-000000000052",
+      "appeal_id": "71000000-0000-4000-8000-000000000042",
+      "action": "override",
+      "reason": "Повторная проверка m0017 подтверждает конкретный следующий шаг.",
+      "expected_revision": 1,
+      "created_at": "2026-11-08T05:13:30Z",
+      "result": {
+        "criterion_id": "next_step",
+        "applicability": "applicable",
+        "answer": true,
+        "explanation": "В m0017 дан конкретный следующий шаг. Исходный пропуск учебной разметки исправлен.",
+        "evidence": [
+          {
+            "kind": "message",
+            "message_id": "m0017"
+          }
+        ],
+        "review_reasons": []
+      }
+    },
+    "original": {
+      "criterion_id": "next_step",
+      "applicability": "applicable",
+      "answer": false,
+      "explanation": "Первичная учебная разметка ошибочно не засчитала следующий шаг; это предмет последующей апелляции.",
+      "evidence": [
+        {
+          "kind": "range",
+          "start_message_id": "m0016",
+          "end_message_id": "m0018"
+        }
+      ],
+      "review_reasons": [],
+      "weight": 5,
+      "base_points": 0.0,
+      "effective_weight": 4.35,
+      "effective_points": 0.0,
+      "review_required": false
+    },
+    "current": {
+      "criterion_id": "next_step",
+      "applicability": "applicable",
+      "answer": true,
+      "explanation": "В m0017 дан конкретный следующий шаг. Исходный пропуск учебной разметки исправлен.",
+      "evidence": [
+        {
+          "kind": "message",
+          "message_id": "m0017"
+        }
+      ],
+      "review_reasons": [],
+      "weight": 5,
+      "base_points": 5.0,
+      "effective_weight": 4.35,
+      "effective_points": 4.35,
+      "review_required": false
+    }
+  },
+  "evaluation": {
+    "id": "71000000-0000-4000-8000-000000000031",
+    "conversation_id": "71000000-0000-4000-8000-000000000001",
+    "transcript_version_id": "71000000-0000-4000-8000-000000000011",
+    "checklist_version_id": "71000000-0000-4000-8000-000000000021",
+    "status": "completed",
+    "revision": 2,
+    "created_at": "2026-11-08T05:10:00Z",
+    "completed_at": "2026-11-08T05:10:01Z",
+    "original": {
+      "total": 65.22,
+      "no_applicable_reason": null,
+      "gross_error": true,
+      "criteria": [
+        {
+          "criterion_id": "contact",
+          "applicability": "applicable",
+          "answer": false,
+          "explanation": "В первом ответе есть приветствие, но нет имени.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0003",
+              "end_message_id": "m0004"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 10,
+          "base_points": 0.0,
+          "effective_weight": 8.7,
+          "effective_points": 0.0,
+          "review_required": false
+        },
+        {
+          "criterion_id": "needs",
+          "applicability": "applicable",
+          "answer": true,
+          "explanation": "До ответа уточнены тип и цель документа.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0003",
+              "end_message_id": "m0005"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 15,
+          "base_points": 15.0,
+          "effective_weight": 13.04,
+          "effective_points": 13.04,
+          "review_required": false
+        },
+        {
+          "criterion_id": "identification",
+          "applicability": "applicable",
+          "answer": true,
+          "explanation": "Оператор запросил подтверждение; system m0008 подтверждает его до передачи в m0009.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0006",
+              "end_message_id": "m0009"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 20,
+          "base_points": 20.0,
+          "effective_weight": 17.39,
+          "effective_points": 17.39,
+          "review_required": false
+        },
+        {
+          "criterion_id": "consultation",
+          "applicability": "applicable",
+          "answer": 15,
+          "explanation": "Основной PDF передан, но второстепенный вопрос о копии в учебном приложении не закрыт.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0005",
+              "end_message_id": "m0012"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 20,
+          "base_points": 15.0,
+          "effective_weight": 17.39,
+          "effective_points": 13.04,
+          "review_required": false
+        },
+        {
+          "criterion_id": "empathy",
+          "applicability": "applicable",
+          "answer": false,
+          "explanation": "В m0014 оператор оскорбил клиента вместо реакции на тревогу.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0013",
+              "end_message_id": "m0014"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 15,
+          "base_points": 0.0,
+          "effective_weight": 13.04,
+          "effective_points": 0.0,
+          "review_required": false
+        },
+        {
+          "criterion_id": "management",
+          "applicability": "applicable",
+          "answer": 10,
+          "explanation": "Последовательность действий понятна; оскорбление учитывается в эмпатии и отдельном флаге.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0004",
+              "end_message_id": "m0018"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 15,
+          "base_points": 15.0,
+          "effective_weight": 13.04,
+          "effective_points": 13.04,
+          "review_required": false
+        },
+        {
+          "criterion_id": "closing",
+          "applicability": "applicable",
+          "answer": false,
+          "explanation": "В обычном завершении нет прощания. Проверен заключительный диапазон.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0118",
+              "end_message_id": "m0120"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 5,
+          "base_points": 0.0,
+          "effective_weight": 4.35,
+          "effective_points": 0.0,
+          "review_required": false
+        },
+        {
+          "criterion_id": "gross_errors",
+          "applicability": "applicable",
+          "answer": true,
+          "explanation": "Прямое оскорбление в m0014. Флаг не обнуляет итог.",
+          "evidence": [
+            {
+              "kind": "message",
+              "message_id": "m0014"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 0,
+          "base_points": 0.0,
+          "effective_weight": 0.0,
+          "effective_points": 0.0,
+          "review_required": false
+        },
+        {
+          "criterion_id": "waiting_notice",
+          "applicability": "not_applicable",
+          "answer": null,
+          "explanation": "N/A: ожидания не было. Проверен весь учебный диалог.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0001",
+              "end_message_id": "m0120"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 5,
+          "base_points": 0.0,
+          "effective_weight": 0.0,
+          "effective_points": 0.0,
+          "review_required": false
+        },
+        {
+          "criterion_id": "document_delivery",
+          "applicability": "applicable",
+          "answer": true,
+          "explanation": "Система подтверждает доставку после действий оператора и подтверждения личности.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0008",
+              "end_message_id": "m0010"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 10,
+          "base_points": 10.0,
+          "effective_weight": 8.7,
+          "effective_points": 8.7,
+          "review_required": false
+        },
+        {
+          "criterion_id": "supervisor_offer",
+          "applicability": "applicable",
+          "answer": true,
+          "explanation": "В m0015 предложен старший специалист. Это отдельное событие, не грубая ошибка.",
+          "evidence": [
+            {
+              "kind": "message",
+              "message_id": "m0015"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 0,
+          "base_points": 0.0,
+          "effective_weight": 0.0,
+          "effective_points": 0.0,
+          "review_required": false
+        },
+        {
+          "criterion_id": "next_step",
+          "applicability": "applicable",
+          "answer": false,
+          "explanation": "Первичная учебная разметка ошибочно не засчитала следующий шаг; это предмет последующей апелляции.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0016",
+              "end_message_id": "m0018"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 5,
+          "base_points": 0.0,
+          "effective_weight": 4.35,
+          "effective_points": 0.0,
+          "review_required": false
+        }
+      ],
+      "sections": [
+        {
+          "name": "Учебные критерии",
+          "base_points": 75.0,
+          "applicable_weight": 115.0,
+          "total": 65.22
+        }
+      ]
+    },
+    "final": {
+      "total": 69.57,
+      "no_applicable_reason": null,
+      "gross_error": true,
+      "criteria": [
+        {
+          "criterion_id": "contact",
+          "applicability": "applicable",
+          "answer": false,
+          "explanation": "В первом ответе есть приветствие, но нет имени.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0003",
+              "end_message_id": "m0004"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 10,
+          "base_points": 0.0,
+          "effective_weight": 8.7,
+          "effective_points": 0.0,
+          "review_required": false
+        },
+        {
+          "criterion_id": "needs",
+          "applicability": "applicable",
+          "answer": true,
+          "explanation": "До ответа уточнены тип и цель документа.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0003",
+              "end_message_id": "m0005"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 15,
+          "base_points": 15.0,
+          "effective_weight": 13.04,
+          "effective_points": 13.04,
+          "review_required": false
+        },
+        {
+          "criterion_id": "identification",
+          "applicability": "applicable",
+          "answer": true,
+          "explanation": "Оператор запросил подтверждение; system m0008 подтверждает его до передачи в m0009.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0006",
+              "end_message_id": "m0009"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 20,
+          "base_points": 20.0,
+          "effective_weight": 17.39,
+          "effective_points": 17.39,
+          "review_required": false
+        },
+        {
+          "criterion_id": "consultation",
+          "applicability": "applicable",
+          "answer": 15,
+          "explanation": "Основной PDF передан, но второстепенный вопрос о копии в учебном приложении не закрыт.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0005",
+              "end_message_id": "m0012"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 20,
+          "base_points": 15.0,
+          "effective_weight": 17.39,
+          "effective_points": 13.04,
+          "review_required": false
+        },
+        {
+          "criterion_id": "empathy",
+          "applicability": "applicable",
+          "answer": false,
+          "explanation": "В m0014 оператор оскорбил клиента вместо реакции на тревогу.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0013",
+              "end_message_id": "m0014"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 15,
+          "base_points": 0.0,
+          "effective_weight": 13.04,
+          "effective_points": 0.0,
+          "review_required": false
+        },
+        {
+          "criterion_id": "management",
+          "applicability": "applicable",
+          "answer": 10,
+          "explanation": "Последовательность действий понятна; оскорбление учитывается в эмпатии и отдельном флаге.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0004",
+              "end_message_id": "m0018"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 15,
+          "base_points": 15.0,
+          "effective_weight": 13.04,
+          "effective_points": 13.04,
+          "review_required": false
+        },
+        {
+          "criterion_id": "closing",
+          "applicability": "applicable",
+          "answer": false,
+          "explanation": "В обычном завершении нет прощания. Проверен заключительный диапазон.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0118",
+              "end_message_id": "m0120"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 5,
+          "base_points": 0.0,
+          "effective_weight": 4.35,
+          "effective_points": 0.0,
+          "review_required": false
+        },
+        {
+          "criterion_id": "gross_errors",
+          "applicability": "applicable",
+          "answer": true,
+          "explanation": "Прямое оскорбление в m0014. Флаг не обнуляет итог.",
+          "evidence": [
+            {
+              "kind": "message",
+              "message_id": "m0014"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 0,
+          "base_points": 0.0,
+          "effective_weight": 0.0,
+          "effective_points": 0.0,
+          "review_required": false
+        },
+        {
+          "criterion_id": "waiting_notice",
+          "applicability": "not_applicable",
+          "answer": null,
+          "explanation": "N/A: ожидания не было. Проверен весь учебный диалог.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0001",
+              "end_message_id": "m0120"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 5,
+          "base_points": 0.0,
+          "effective_weight": 0.0,
+          "effective_points": 0.0,
+          "review_required": false
+        },
+        {
+          "criterion_id": "document_delivery",
+          "applicability": "applicable",
+          "answer": true,
+          "explanation": "Система подтверждает доставку после действий оператора и подтверждения личности.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0008",
+              "end_message_id": "m0010"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 10,
+          "base_points": 10.0,
+          "effective_weight": 8.7,
+          "effective_points": 8.7,
+          "review_required": false
+        },
+        {
+          "criterion_id": "supervisor_offer",
+          "applicability": "applicable",
+          "answer": true,
+          "explanation": "В m0015 предложен старший специалист. Это отдельное событие, не грубая ошибка.",
+          "evidence": [
+            {
+              "kind": "message",
+              "message_id": "m0015"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 0,
+          "base_points": 0.0,
+          "effective_weight": 0.0,
+          "effective_points": 0.0,
+          "review_required": false
+        },
+        {
+          "criterion_id": "next_step",
+          "applicability": "applicable",
+          "answer": true,
+          "explanation": "В m0017 дан конкретный следующий шаг. Исходный пропуск учебной разметки исправлен.",
+          "evidence": [
+            {
+              "kind": "message",
+              "message_id": "m0017"
+            }
+          ],
+          "review_reasons": [],
+          "weight": 5,
+          "base_points": 5.0,
+          "effective_weight": 4.35,
+          "effective_points": 4.35,
+          "review_required": false
+        }
+      ],
+      "sections": [
+        {
+          "name": "Учебные критерии",
+          "base_points": 80.0,
+          "applicable_weight": 115.0,
+          "total": 69.57
+        }
+      ]
+    },
+    "review_required": false,
+    "review_reasons": [],
+    "provenance": {
+      "provider": "synthetic",
+      "model_requested": "synthetic-manual-workspace",
+      "model_reported": null,
+      "prompt_version": "fixture-only-v1",
+      "duration_ms": 0,
+      "usage": {
+        "request_count": 1,
+        "input_tokens": null,
+        "output_tokens": null,
+        "total_tokens": null,
+        "cached_input_tokens": null,
+        "reasoning_output_tokens": null
+      },
+      "estimated_cost_usd": null
+    },
+    "error": null
+  }
+}

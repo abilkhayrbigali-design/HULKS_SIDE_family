@@ -1,0 +1,144 @@
+{
+  "items": [
+    {
+      "id": "71000000-0000-4000-8000-000000000042",
+      "evaluation_id": "71000000-0000-4000-8000-000000000031",
+      "criterion_id": "next_step",
+      "comment": "Учебное обращение 2: проверьте следующий шаг в m0017.",
+      "status": "resolved",
+      "base_revision": 1,
+      "current_revision": 2,
+      "created_at": "2026-11-08T05:13:00Z",
+      "decision": {
+        "id": "71000000-0000-4000-8000-000000000052",
+        "appeal_id": "71000000-0000-4000-8000-000000000042",
+        "action": "override",
+        "reason": "Повторная проверка m0017 подтверждает конкретный следующий шаг.",
+        "expected_revision": 1,
+        "created_at": "2026-11-08T05:13:30Z",
+        "result": {
+          "criterion_id": "next_step",
+          "applicability": "applicable",
+          "answer": true,
+          "explanation": "В m0017 дан конкретный следующий шаг. Исходный пропуск учебной разметки исправлен.",
+          "evidence": [
+            {
+              "kind": "message",
+              "message_id": "m0017"
+            }
+          ],
+          "review_reasons": []
+        }
+      },
+      "original": {
+        "criterion_id": "next_step",
+        "applicability": "applicable",
+        "answer": false,
+        "explanation": "Первичная учебная разметка ошибочно не засчитала следующий шаг; это предмет последующей апелляции.",
+        "evidence": [
+          {
+            "kind": "range",
+            "start_message_id": "m0016",
+            "end_message_id": "m0018"
+          }
+        ],
+        "review_reasons": [],
+        "weight": 5,
+        "base_points": 0.0,
+        "effective_weight": 4.35,
+        "effective_points": 0.0,
+        "review_required": false
+      },
+      "current": {
+        "criterion_id": "next_step",
+        "applicability": "applicable",
+        "answer": true,
+        "explanation": "В m0017 дан конкретный следующий шаг. Исходный пропуск учебной разметки исправлен.",
+        "evidence": [
+          {
+            "kind": "message",
+            "message_id": "m0017"
+          }
+        ],
+        "review_reasons": [],
+        "weight": 5,
+        "base_points": 5.0,
+        "effective_weight": 4.35,
+        "effective_points": 4.35,
+        "review_required": false
+      }
+    },
+    {
+      "id": "71000000-0000-4000-8000-000000000041",
+      "evaluation_id": "71000000-0000-4000-8000-000000000031",
+      "criterion_id": "next_step",
+      "comment": "Учебное обращение 1: проверьте следующий шаг в m0017.",
+      "status": "resolved",
+      "base_revision": 0,
+      "current_revision": 2,
+      "created_at": "2026-11-08T05:12:00Z",
+      "decision": {
+        "id": "71000000-0000-4000-8000-000000000051",
+        "appeal_id": "71000000-0000-4000-8000-000000000041",
+        "action": "confirm",
+        "reason": "Первое учебное решение сохранило ошибочный текущий ответ; история должна остаться неизменной.",
+        "expected_revision": 0,
+        "created_at": "2026-11-08T05:12:30Z",
+        "result": {
+          "criterion_id": "next_step",
+          "applicability": "applicable",
+          "answer": false,
+          "explanation": "Первичная учебная разметка ошибочно не засчитала следующий шаг; это предмет последующей апелляции.",
+          "evidence": [
+            {
+              "kind": "range",
+              "start_message_id": "m0016",
+              "end_message_id": "m0018"
+            }
+          ],
+          "review_reasons": []
+        }
+      },
+      "original": {
+        "criterion_id": "next_step",
+        "applicability": "applicable",
+        "answer": false,
+        "explanation": "Первичная учебная разметка ошибочно не засчитала следующий шаг; это предмет последующей апелляции.",
+        "evidence": [
+          {
+            "kind": "range",
+            "start_message_id": "m0016",
+            "end_message_id": "m0018"
+          }
+        ],
+        "review_reasons": [],
+        "weight": 5,
+        "base_points": 0.0,
+        "effective_weight": 4.35,
+        "effective_points": 0.0,
+        "review_required": false
+      },
+      "current": {
+        "criterion_id": "next_step",
+        "applicability": "applicable",
+        "answer": true,
+        "explanation": "В m0017 дан конкретный следующий шаг. Исходный пропуск учебной разметки исправлен.",
+        "evidence": [
+          {
+            "kind": "message",
+            "message_id": "m0017"
+          }
+        ],
+        "review_reasons": [],
+        "weight": 5,
+        "base_points": 5.0,
+        "effective_weight": 4.35,
+        "effective_points": 4.35,
+        "review_required": false
+      }
+    }
+  ],
+  "total": 2,
+  "limit": 100,
+  "offset": 0
+}

@@ -4,6 +4,29 @@
 Исходный репозиторий используется исключительно для чтения. Старые инкременты
 C-06/C-07/C-08 и их проверки сохранены в ROADMAP/DECISIONS.
 
+## Redesign workspace — C-10
+
+Audit 2026-11-08 на `8d4faad`: backend API для трёхпанельного workspace менять
+не требуется. [WORKSPACE_CONTRACT](WORKSPACE_CONTRACT.md) фиксирует привязку
+selected evaluation к transcript/checklist snapshots, immutable decision.result,
+N/A/flags, пагинацию, импорт и ошибки. Необеспеченные сервером assignment,
+SLA/очередь приоритетов и авторы audit-событий не подменяются выдуманными полями.
+
+[Workspace fixtures](../data/fixtures/synthetic/workspace/README.md) согласованы
+с Артёмом и Нурсултаном: 120 сообщений четырёх ролей, 12→13 критериев, разные
+current/archived snapshots, original65.22/final69.57, отдельные gross/custom flags
+и история confirm=false → override=true. Все JSON включены в общую manifest-
+проверку; исходные fixture-файлы и frontend files не менялись.
+
+В C-10 выполнены `pytest backend/tests` — **238 passed**, Ruff check/format и
+`git diff --check`. Нурсултан независимо проверил wire-схемы, ссылки и полные
+Assessment серверным Decimal-расчётом. Живые OpenAI-вызовы и Ground Truth не
+использовались; runtime backend/scoring/provider остаются без изменений.
+Финальная UI-проверка snapshot/history будет выполнена после React checkpoint;
+новый Q-01 относится к текущему инкременту, а не к историческому ревью MVP.
+
+## Существующая реализация и передача MVP
+
 Реализованы JSON/HTTP-импорт, immutable snapshots, versioned checklists,
 persisted evaluations, bounded worker, апелляции и confirm/override.
 Все business routes имеют реальные Pydantic response_model. List checklist

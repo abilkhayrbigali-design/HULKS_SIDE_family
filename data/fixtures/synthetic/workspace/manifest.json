@@ -1,0 +1,46 @@
+{
+  "synthetic": true,
+  "purpose": "Manually constructed offline workspace wire fixtures, not AI outputs or human Ground Truth. request_count illustrates wire format only.",
+  "fixtures": [
+    {
+      "file": "conversation.current.json",
+      "schema": "ConversationDetail"
+    },
+    {
+      "file": "conversation.archived.json",
+      "schema": "ConversationDetail"
+    },
+    {
+      "file": "checklist.v1.json",
+      "schema": "ChecklistVersion"
+    },
+    {
+      "file": "checklist.v2.json",
+      "schema": "ChecklistVersion"
+    },
+    {
+      "file": "evaluation.archived.json",
+      "schema": "Evaluation"
+    },
+    {
+      "file": "evaluation.current.json",
+      "schema": "Evaluation"
+    },
+    {
+      "file": "evaluation.failed.json",
+      "schema": "Evaluation"
+    },
+    {
+      "file": "evaluations.page.json",
+      "schema": "EvaluationPage"
+    },
+    {
+      "file": "appeals.page.json",
+      "schema": "AppealPage"
+    },
+    {
+      "file": "decision.override.response.json",
+      "schema": "DecisionResponse"
+    }
+  ]
+}
