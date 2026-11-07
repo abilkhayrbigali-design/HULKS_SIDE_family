@@ -188,6 +188,9 @@ Worker ограничен `evaluation_concurrency`: короткая транз�
 короткая транзакция complete/fail. `PipelineResult` содержит assessment, provenance,
 review_required и review_reasons. `EvaluationError` содержит фиксированный code,
 safe_message и nullable provenance; известный usage сохраняется даже при ошибке.
+Отмена provider передаёт per-call aggregate provenance через CancelledError.provenance;
+worker сохраняет его вместе с INTERRUPTED. Отменённая попытка с неизвестным usage
+не выдаётся за нулевое потребление.
 `queued` после старта обрабатывается; прежний `running` становится failed/INTERRUPTED
 без повторного платного запроса. Остановка отменяет текущие задачи и закрывает
 только принадлежащий приложению pipeline/provider.
