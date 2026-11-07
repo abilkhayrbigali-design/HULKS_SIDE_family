@@ -4,6 +4,7 @@ import json
 from sqlalchemy import func, select, text
 
 from app.models.data import Conversation, Message, TranscriptVersion
+from app.models.evaluations import Evaluation
 from app.services.errors import require
 
 
@@ -82,10 +83,16 @@ def summary(session, row):
     count = session.scalar(
         select(func.count()).select_from(Message).where(Message.transcript_version_id == version.id)
     )
-    return _summary(row, version, count)
+    return _summary(session, row, version, count)
 
 
-def _summary(row, version, message_count):
+def _summary(session, row, version, message_count):
+    latest = session.scalar(
+        select(Evaluation)
+        .where(Evaluation.conversation_id == row.id)
+        .order_by(Evaluation.created_at.desc(), Evaluation.id)
+        .limit(1)
+    )
     return dict(
         id=row.id,
         external_id=row.external_id,
@@ -95,7 +102,15 @@ def _summary(row, version, message_count):
         channel=version.channel,
         current_transcript_version_id=row.current_transcript_version_id,
         message_count=message_count,
-        latest_evaluation=None,
+        latest_evaluation=None
+        if latest is None
+        else dict(
+            id=latest.id,
+            status=latest.status,
+            original_total=None if latest.original is None else latest.original["total"],
+            final_total=None if latest.final is None else latest.final["total"],
+            created_at=latest.created_at,
+        ),
     )
 
 
@@ -115,7 +130,7 @@ def detail(session, conversation_id, transcript_version_id=None):
         .where(Message.transcript_version_id == version.id)
         .order_by(Message.position)
     ).all()
-    result = _summary(row, version, len(messages))
+    result = _summary(session, row, version, len(messages))
     result.update(
         transcript_version_id=version.id,
         audio_url=version.audio_url,

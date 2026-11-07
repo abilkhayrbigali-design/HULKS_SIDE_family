@@ -39,7 +39,7 @@ class Criterion(Schema):
     allow_na: StrictBool = False
     na_rule: Text | None = None
     scale: list[ScaleStep] | None = None
-    section: str | None = None
+    section: Text | None = None
 
     @model_validator(mode="after")
     def validate_definition(self):
@@ -81,10 +81,10 @@ class ChecklistUpdate(CriteriaInput):
 
 
 class OrganizerMessage(Schema):
-    timestamp: str
+    timestamp: Annotated[str, Field(min_length=1, pattern=r"\S")]
     speaker: Literal["client", "operator", "bot", "system"]
     # Keep original text and timestamps byte-for-byte, including whitespace.
-    text: Annotated[str, Field(min_length=1)]
+    text: Annotated[str, Field(min_length=1, pattern=r"\S")]
 
 
 class OrganizerRecord(Schema):

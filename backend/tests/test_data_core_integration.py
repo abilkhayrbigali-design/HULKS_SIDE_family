@@ -32,7 +32,7 @@ def test_data_api_with_shared_errors_and_request_middleware(tmp_path, caplog):
             assert "error=NOT_FOUND" in requests[0].getMessage()
             checklist = client.get("/api/v1/checklists").json()["items"][0]
             version = client.get(
-                f"/api/v1/checklist-versions/{checklist['current_version_id']}"
+                f"/api/v1/checklist-versions/{checklist['latest_version_id']}"
             ).json()
 
             def fail_commit(connection):
