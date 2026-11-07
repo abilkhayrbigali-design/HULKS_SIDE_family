@@ -1,7 +1,120 @@
-import {useEffect,useState} from 'react';
-import {CheckCheck,ClipboardList,MessagesSquare,ShieldCheck,Menu,X} from 'lucide-react';
-import {Conversations} from './features/Conversations';
-import {ConversationView} from './features/ConversationView';
-import {Checklists} from './features/Checklists';
-function route(){const [path,query='']=location.hash.replace(/^#/,'').split('?');return {path:path||'/dialogues',evaluation:new URLSearchParams(query).get('evaluation')};}
-export function App(){const [current,setCurrent]=useState(route);const [mobile,setMobile]=useState(false);useEffect(()=>{const onHash=()=>{setCurrent(route());setMobile(false);window.scrollTo(0,0);};window.addEventListener('hashchange',onHash);return()=>window.removeEventListener('hashchange',onHash);},[]);const conversation=current.path.match(/^\/dialogues\/([^/]+)$/)?.[1];const checklist=current.path==='/checklists';return <div className="app-shell"><a href="#main" className="skip-link">К содержимому</a><aside className={`sidebar ${mobile?'is-open':''}`}><a href="#/dialogues" className="brand"><span className="brand-mark"><CheckCheck size={24}/></span><span>HULK’S FAMILY<small>CONVERSATION INTELLIGENCE</small></span></a><div className="workspace-label">РАБОЧЕЕ ПРОСТРАНСТВО</div><nav aria-label="Основная навигация"><a className={!checklist?'active':''} href="#/dialogues"><MessagesSquare size={20}/>Диалоги<span className="nav-dot"/></a><a className={checklist?'active':''} href="#/checklists"><ClipboardList size={20}/>Чек-листы</a></nav><div className="sidebar-note"><ShieldCheck size={23}/><strong>Каждая оценка — с основанием</strong><p>Критерии, фрагменты диалога и история решений в одном месте.</p></div><div className="sidebar-footer"><span className="avatar">HF</span><div>Команда качества<small>CQA · Рабочая среда</small></div></div></aside><div className="main-shell"><header className="topbar"><div><button className="icon-button mobile-menu" onClick={()=>setMobile(!mobile)} aria-label={mobile?'Закрыть навигацию':'Открыть навигацию'}>{mobile?<X/>:<Menu/>}</button><span className="breadcrumb">Контроль качества <span>/</span> <strong>{checklist?'Чек-листы':'Диалоги'}</strong></span></div><span className="environment"><span/> OpenAI · настраивается на сервере</span></header><main id="main" tabIndex={-1}>{checklist?<Checklists/>:conversation?<ConversationView key={conversation} id={decodeURIComponent(conversation)} evaluationId={current.evaluation}/>:<Conversations/>}</main><footer className="page-footer">HULK’S FAMILY <span>Оцениваем работу оператора. Решение подтверждается диалогом.</span></footer></div></div>}
+import { useEffect, useState } from "react";
+import {
+  CheckCheck,
+  ClipboardList,
+  MessagesSquare,
+  ShieldCheck,
+  Menu,
+  X,
+} from "lucide-react";
+import { Conversations } from "./features/Conversations";
+import { ConversationView } from "./features/ConversationView";
+import { Checklists } from "./features/Checklists";
+function route() {
+  const [path, query = ""] = location.hash.replace(/^#/, "").split("?");
+  return {
+    path: path || "/dialogues",
+    evaluation: new URLSearchParams(query).get("evaluation"),
+  };
+}
+export function App() {
+  const [current, setCurrent] = useState(route);
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const onHash = () => {
+      setCurrent(route());
+      setMobile(false);
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  const conversation = current.path.match(/^\/dialogues\/([^/]+)$/)?.[1];
+  const checklist = current.path === "/checklists";
+  return (
+    <div className="app-shell">
+      <a
+        href="#main"
+        className="skip-link"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById("main")?.focus();
+        }}
+      >
+        К содержимому
+      </a>
+      <aside className={`sidebar ${mobile ? "is-open" : ""}`}>
+        <a href="#/dialogues" className="brand">
+          <span className="brand-mark">
+            <CheckCheck size={24} />
+          </span>
+          <span>
+            HULK’S FAMILY<small>CONVERSATION INTELLIGENCE</small>
+          </span>
+        </a>
+        <div className="workspace-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+        <nav aria-label="Основная навигация">
+          <a className={!checklist ? "active" : ""} href="#/dialogues">
+            <MessagesSquare size={20} />
+            Диалоги
+            <span className="nav-dot" />
+          </a>
+          <a className={checklist ? "active" : ""} href="#/checklists">
+            <ClipboardList size={20} />
+            Чек-листы
+          </a>
+        </nav>
+        <div className="sidebar-note">
+          <ShieldCheck size={23} />
+          <strong>Каждая оценка — с основанием</strong>
+          <p>Критерии, фрагменты диалога и история решений в одном месте.</p>
+        </div>
+        <div className="sidebar-footer">
+          <span className="avatar">HF</span>
+          <div>
+            Команда качества<small>CQA · Рабочая среда</small>
+          </div>
+        </div>
+      </aside>
+      <div className="main-shell">
+        <header className="topbar">
+          <div>
+            <button
+              className="icon-button mobile-menu"
+              onClick={() => setMobile(!mobile)}
+              aria-label={mobile ? "Закрыть навигацию" : "Открыть навигацию"}
+            >
+              {mobile ? <X /> : <Menu />}
+            </button>
+            <span className="breadcrumb">
+              Контроль качества <span>/</span>{" "}
+              <strong>{checklist ? "Чек-листы" : "Диалоги"}</strong>
+            </span>
+          </div>
+          <span className="environment">
+            <span /> OpenAI · настраивается на сервере
+          </span>
+        </header>
+        <main id="main" tabIndex={-1}>
+          {checklist ? (
+            <Checklists />
+          ) : conversation ? (
+            <ConversationView
+              key={conversation}
+              id={decodeURIComponent(conversation)}
+              evaluationId={current.evaluation}
+            />
+          ) : (
+            <Conversations />
+          )}
+        </main>
+        <footer className="page-footer">
+          HULK’S FAMILY{" "}
+          <span>
+            Оцениваем работу оператора. Решение подтверждается диалогом.
+          </span>
+        </footer>
+      </div>
+    </div>
+  );
+}
