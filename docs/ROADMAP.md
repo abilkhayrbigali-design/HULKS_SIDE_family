@@ -54,7 +54,7 @@
 
 ## 3. Состояния и доказательства готовности
 
-`TODO → IN_PROGRESS → DONE`. Дополнительные состояния: `BLOCKED` с причиной/условием разблокировки, `SUPERSEDED` со ссылкой на замену.
+`TODO → IN_PROGRESS → DONE`. Дополнительные состояния: `BLOCKED` с причиной/условием разблокировки, `SUPERSEDED` со ссылкой на замену, `DEFERRED` — отложено пользователем до отдельной команды.
 
 Для `DONE` нужны реализованное поведение, относящиеся к нему проверки и краткое подтверждение в колонке результата. Если тест не запускался, так и указывается; это не считается подтверждением его прохождения. Нельзя отмечать интеграцию готовой на одних mocks.
 
@@ -68,7 +68,7 @@
 
 | ID | Приоритет | Ответственный | Задача и критерий готовности | Зависимости | Статус | Результат/проверка |
 | --- | --- | --- | --- | --- | --- | --- |
-| Q-01 | P0 | Автор PR; интегратор проверяет результат | Для каждого PR создать отдельного reviewer gpt-6.1-sol/xhigh по CODE_REVIEW.md. Исправить подтверждённые дефекты, пройти относящиеся проверки и получить отчёт на финальные base/head SHA. Применяется ко всем участникам, включая документационные PR | Изменения, вошедшие в конкретный PR; D-012 | DONE | Независимый gpt-6.1-sol/xhigh одобрил объединённый код и документацию; подтверждённые замечания исправлены с регрессиями. Финальные base/head SHA, результаты и проверка CI перед слиянием фиксируются в PR №2. История PR №1 сохранена |
+| Q-01 | P0 | Автор PR; интегратор проверяет результат | Для каждого PR создать отдельного reviewer gpt-6.1-sol/xhigh по CODE_REVIEW.md. Исправить подтверждённые дефекты, пройти относящиеся проверки и получить отчёт на финальные base/head SHA. Применяется ко всем участникам, включая документационные PR | Изменения, вошедшие в конкретный PR; D-012 | IN_PROGRESS | Текущее исправление AUD-03 требует нового независимого gpt-6.1-sol/xhigh на финальных base/head SHA; combined review выполняет родительский интегратор. Предыдущие проверки PR №1 и №2 остаются в истории и не заменяют этот gate |
 
 ### Абулхаир — интеграция и выпуск
 
@@ -131,12 +131,14 @@
 | R-07 | P0 | Внедрить dark/light graphite tokens, Inter, Lucide и выбранные через реальный shadcn MCP компоненты; neutral selection отличается от green evidence и teal pass | R-06; D-020 | DONE | Dark/light tokens Figma, локальный Inter, Lucide и8 исходных shadcn компонентов после настоящего MCP registry discovery; TypeScript/Vite/7Vitest PASS; лимит повторного Figma code-context явно указан |
 | R-08 | P0 | Независимый scroll, resize/collapse, keyboard и narrow tabs без потери snapshots/evidence/scroll и черновиков | R-06, R-07 | DONE | Resize/keyboard/collapse/inert, narrow close/focus, actual evidence bounds после resize и manual-reading anchor, session filters, scoped drafts и async generation guards проверены; независимые N/C/root и6 reviewer repro PASS |
 | R-09 | P0 | Расширить 13 E2E, проверить desktop/narrow/long conversations/>8criteria/themes/resize/evidence/appeals/errors; build и Q-01 exact SHA | R-06—R-08; N/C workspace QA | DONE | 27 E2E/7Vitest/TypeScript/build PASS; Sol/xhigh проверил функциональный SHA и исправления, подтверждение окончательного SHA документации передаётся интегратору отдельно; liveAI не выполнялся |
+| AUD-02 | P1 | Экспорт результата/сводки из текущего интерфейса; начинать только после отдельного возобновления пользователем | X-01; основные CQA-сценарии | DEFERRED | Отложен пользователем. В текущем AUD-03 экспорт не реализуется и API не меняется |
+| AUD-03 | P1 | Обновлять очередь ровно один раз при завершении polling queued/running → completed/failed; сохранить защиту от поздних ответов другого диалога/запуска | R-02, R-06; API_CONTRACT; Q-01 | IN_PROGRESS | Terminal polling вызывает refreshQueue один раз; active/generation guard отклоняет поздний ответ, выбранный evaluation ID проверяется. Две новые регрессии воспроизвели устаревшую очередь до fix; после check/build,7Vitest и31Playwright PASS. Настоящая HTTP/SQLite/worker интеграция с внедрённым synthetic provider и новый Q-01 выполняются интегратором; OpenAI live не вызывался |
 
 ### Необязательное развитие
 
 | ID | Приоритет | Ответственный | Задача и условие начала | Статус |
 | --- | --- | --- | --- | --- |
-| X-01 | P1 | Артём + Чингиз | Экспорт результата/сводка по критериям. Начинать после готовности основных сценариев и проверки точности | TODO |
+| X-01 | P1 | Артём + Чингиз | Экспорт результата/сводка по критериям. Начинать после готовности основных сценариев и проверки точности | DEFERRED — AUD-02; отложен пользователем |
 | X-02 | P1 | Нурсултан | Второй проверочный проход для сложных случаев. Оставить только при измеренном улучшении с учётом задержки и полной стоимости | TODO |
 | X-03 | P2 | Нурсултан | Локальный провайдер при наличии подходящего оборудования и времени; тот же контракт и сравнительный benchmark | TODO |
 | X-04 | P2 | Абулхаир + Чингиз | PostgreSQL/внешняя очередь/интеграция Dynamics, если возникнут реальные требования к масштабу или встраиванию | TODO |
@@ -254,3 +256,4 @@
 | 2026-11-08 | Нурсултан | N-07, Q-01 | Final Reactf6ef226 на synthetic HTTP8002 прошёл4 targeted checks: draft criterion/snapshot isolation, mobileclose/focus, custom flag neutral иinactive pane0visible targets. Обновлён stale основной результат N-07 по замечанию независимого docs reviewer; исправлен cwd команды воспроизведения | 3PASS+selector-only correction→1/1 targetedPASS;3final PNG лично просмотрены. Frontend/provider/scoring не менялись; final docs SHA повторно проверяет Sol/xhigh |
 | 2026-11-08 | Родительский агент | DES-01, Q-01 | Объединены Figma, React и независимые N/C протоколы; исправлены подтверждённые async/snapshot/scroll/focus/overflow/draft/resize ошибки. Последний frontend4074b85 проверен отдельно от документации. Официальный MCP audit завершён; source repo не изменялся | Root:238pytest,7Vitest,27E2E33.1s, TypeScript/build/smoke PASS, upstream_requests=0; native1440/390 и actual API import→503 PASS. Sol/xhigh одобрил последний code SHA; финальный docs head и CI проверяются в PR №2 |
 | 2026-11-08 | Родительский агент | DES-01, Q-01 | Независимый Sol/xhigh подтвердил весь код и документацию 4e0031b без открытых findings. Все четыре области переданы с собственными отчётами; завершены Figma/React/QA/roadmap, осталось сверить этот финальный status-only SHA и CI в PR перед main | 238pytest/7Vitest/27E2E и build/smoke PASS; code CIc8f7bfb SUCCESS. Final status delta повторно подтверждает тот же reviewer; точные base/head и финальный CI сохраняются в PR №2 |
+| 2026-11-08 | Артём | AUD-02, AUD-03, Q-01 | В новой согласованной ветке codex/artem-aud03 от a8c045f исправлен пропущенный refresh очереди после terminal polling; nonterminal ответы не обновляют очередь, поздние ответы и ошибки ограничены текущим generation. AUD-02/X-01 явно отложены пользователем; backend runtime и экспорт не менялись | До fix2 terminal E2E FAILED при обновившейся карточке и устаревшем queue badge;2 stale-response checks PASS. После fix31Playwright,7Vitest,TypeScript/build и diff--check PASS; queue получает ровно +1GET при completed/failed. Новые payload-логи не добавлялись, PRIVATE_SERVER_MARKER не виден в DOM/консоли. Настоящий injected-provider HTTP QA и combined Q-01 ожидаются; live API и записи в защищённый source не выполнялись |

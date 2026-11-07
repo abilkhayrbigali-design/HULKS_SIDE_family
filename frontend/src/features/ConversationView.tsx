@@ -232,22 +232,30 @@ export function ConversationView({
   const polling =
     !!evaluation && ["running", "queued"].includes(evaluation.status);
   useEffect(() => {
-    if (!evaluation || !polling || evaluation.conversation_id !== id) return;
+    if (
+      !evaluation ||
+      !polling ||
+      evaluation.conversation_id !== id ||
+      (evaluationId && evaluation.id !== evaluationId)
+    )
+      return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
         const next = await api.evaluation(evaluation.id, true);
-        if (active) {
+        if (active && isCurrent()) {
           setEvaluation(next);
           setHistory((items) =>
             items.map((e) => (e.id === next.id ? next : e)),
           );
           if (["running", "queued"].includes(next.status))
             timer = setTimeout(poll, 2000);
+          else if (["completed", "failed"].includes(next.status))
+            workspace.refreshQueue();
         }
       } catch (e) {
-        if (active) {
+        if (active && isCurrent()) {
           const failure =
             e instanceof ApiError ? e : new ApiError(0, "NETWORK_ERROR");
           logFailure(failure.status, failure.code);
