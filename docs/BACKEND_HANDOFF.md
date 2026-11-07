@@ -27,8 +27,11 @@ reason/result.explanation согласованы с actual API; current manageme
 больше не ссылается на оскорбление архивной версии. Связь immutable decision.result,
 current/final и причины теперь проверяется явно; после исправлений contract suite
 повторно прошёл 50 тестов. ID/ответы/диапазоны/баллы не менялись.
-Финальная UI-проверка snapshot/history будет выполнена после React checkpoint;
-новый Q-01 относится к текущему инкременту, а не к историческому ревью MVP.
+[Targeted UI API review](WORKSPACE_API_REVIEW.md) подтвердил frozen snapshots,
+original/final и историю нового React workspace. Найдены два P2 контекста при
+ошибке загрузки и отложенном решении; повторная проверка production-сборки R
+`6ffdc7f` показала PASS для обоих. Новый Q-01 относится к текущему инкременту,
+а не к историческому ревью MVP. Полный итоговый UI/release проверяет интегратор.
 
 ## Существующая реализация и передача MVP
 
