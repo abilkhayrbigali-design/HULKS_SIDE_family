@@ -1,7 +1,8 @@
 # Приёмка редизайна CQA — N-07
 
-Статус: **план проверки**, 2026-11-08. Этот документ не подтверждает готовность Figma,
-React-интерфейса или точность модели. Выполненные сценарии записываются отдельно ниже.
+Статус: **выполненный HTTP QA и частичный Figma audit**, 2026-11-08. Проверены
+перечисленные ниже checkpoint; недоступные Design-состояния и native-проверки дочернего
+агента явно ограничены. Этот протокол не подтверждает точность модели.
 Основа — [API-контракт](API_CONTRACT.md), [расчёт](SCORING.md),
 [план проверок](TEST_PLAN.md) и [безопасные журналы](LOGGING.md).
 
@@ -88,16 +89,17 @@ npm run test:e2e
 
 | Область | Статус | Фактическая проверка/ограничение |
 | --- | --- | --- |
-| Подготовка | IN_PROGRESS | Контракты прочитаны, acceptance и ownership согласованы. |
+| Подготовка | DONE | Контракты прочитаны, acceptance и ownership согласованы. |
 | Editable Figma | PARTIAL | Dark frame 3:103 просмотрен по corrected PNG: базовая семантика PASS. Native counts/0IMAGE получены от Абулхаира; независимый get_metadata ограничен Starter MCP quota. Light/narrow/error/history ещё не проверены. |
 | Synthetic workspace fixtures | PASS | Read-only набор Чингиза ce856d8c2577e247eee3daa99c849a31b10b7cf0: все 10 wire JSON валидны по canonical schemas; полный пересчёт original/final совпал, IDs снимков согласованы, 120 сообщений/4 роли и 12/13 критериев. |
 | Native CUA в дочернем агенте | NOT_AVAILABLE | Штатный cua.getState вернул пустые apps/browsers. Root проверяет свой native surface отдельно; согласован Playwright QA обычного HTTP React app, без file:// и обходов. |
-| React desktop/narrow/themes | PASS_CHECKPOINT | Независимый HTTP Playwright прогон R 6ffdc7f: desktop1440×900, narrow390×844, light/dark, keyboard splitter и resize. Это промежуточный checkpoint, не приёмка последующего delta. |
-| Evidence/appeals/history/errors | PARTIAL | На 6ffdc7f подтверждены frozen snapshots, system evidence, missing range118–120, accepted decision history,503/no-key и сохранение draft при tab/resize/failed submit. Draft isolation между criterion/context и narrow-close ещё ожидают финальный delta R. |
+| React desktop/narrow/themes | PASS | Четыре независимых HTTP сценария на R6ffdc7f; финальный Rf6ef226 дополнительно проверен четырьмя targeted сценариями на root8002. Desktop1440×900, narrow390×844/800×900, light/dark, keyboard splitter, resize, close/focus и inactive panes. |
+| Evidence/appeals/history/errors | PASS | Frozen snapshots, system evidence, missing range118–120, immutable accepted history,503/no-key и unsent draft; на f6ef226 подтверждены criterion/current–archive draft isolation, narrow-close и отсутствие hidden interactive targets. |
 | Живой AI и модельная точность | OUT_OF_SCOPE | Запрещены текущим поручением; UI-тесты их не подтверждают. |
 
-Итоговый отчёт содержит фактические PASS/FAIL/NOT_RUN, SHA, шаги, viewport, путь каждого
-скриншота и ограничения. Наличие документа или синтетического ответа не завершает N-07.
+Отчёт содержит фактические PASS/FAIL/NOT_RUN, SHA, шаги, viewport, пути скриншотов
+и ограничения. Завершение N-07 относится к проведённому QA; недоступные Figma-состояния
+и model accuracy не объявляются проверенными.
 
 ### Проверенный synthetic checkpoint
 
@@ -166,6 +168,7 @@ synthetic/AI-not-run и отсутствие решений проверяюще
 Реально выполненная команда временного независимого runner:
 
 ```bash
+cd /home/abilkhayr/.codex/worktrees/cqa-artem/side_family/frontend
 ./node_modules/.bin/playwright test \
   --config=/tmp/cqa-nursultan-http-qa/playwright.config.ts
 ```
@@ -202,3 +205,49 @@ visible descendants при hidden quality pane; следующий read уже �
 
 Native CUA root сообщил как отдельную проверку обычного API/синтетического HTTP: импорт,
 AI_NOT_CONFIGURED503 и безопасная консоль PASS. Нурсултан не приписывает себе этот прогон.
+
+### Финальный адресный проход React
+
+Код `f6ef226cab13f6bc5a7385e61947ede3329b2135`, собранный root и обслуживаемый по
+обычному HTTP `127.0.0.1:8002`. Это отдельный явно synthetic read-only QA-сервер;
+проверки переиспользуют fixture helper и не меняют продуктовый backend.
+
+Четыре targeted сценария **PASS**:
+
+- Draft A/contact → B/needs сохраняет отдельные значения. Current → archive → current
+  не переносит комментарии между снимками и восстанавливает правильные значения.
+  Ключей appeal/draft в localStorage нет; session-only cache не выдаётся за сохранённое решение.
+- На800×900 «Свернуть оценку» возвращает «Диалог» и видимый полезный focus за пределами
+  скрытой quality pane; выбранные evidence и transcript остаются доступны.
+- Пользовательский supervisor_offer=true нейтрален и не получает negative badge;
+  gross_error=false и100/100 остаются отдельными от этого события.
+- У неактивной quality pane сразу visibility hidden/aria-hidden/inert и **0** видимых
+  интерактивных descendants. Прежний transient visibility flash устранён.
+
+Точный targeted запуск:
+
+```bash
+cd /home/abilkhayr/.codex/worktrees/cqa-artem/side_family/frontend
+CQA_QA_BASE_URL=http://127.0.0.1:8002 ./node_modules/.bin/playwright test \
+  --config=/tmp/cqa-nursultan-http-qa/playwright.config.ts \
+  --grep 'final scoped|final narrow|final custom|hidden quality'
+```
+
+Результат первого запуска: 3 PASS и тестовый selector timeout exact getByLabel(select).
+После исправления только временного locator на combobox role, `--grep 'final scoped'`
+дал1/1 PASS. Продуктовый код Нурсултан не менял. Это суммарно четыре адресно подтверждённых
+сценария, а не новый полный прогон всех регрессий. Root отдельно сообщил27E2E/7unit/TS/build
+и fullHTTPsmoke с upstream_requests=0; они не приписываются Нурсултану.
+
+Финальные PNG в том же каталоге workspace-qa, лично просмотрены:
+
+- `final-draft-snapshot-isolation.png` — восстановлен правильный current/needs draft после
+  roundtrip через архив; исходные оценки и ревизия видны рядом.
+- `final-narrow-close-focus.png` — narrow800×900, transcript активен, контекст разных ролей
+  и зелёное evidence сохранены без ghost-кнопок.
+- `final-custom-flag-neutral.png` — 13 критериев, нейтральное пользовательское событие и100/100.
+
+Открытых подтверждённых blocking findings в проверенном workspace нет. Light Figma native
+создан по отчёту A/root, но его PNG и отдельные narrow/error Design-фреймы не проверены:
+Starter MCP quota ограничила дальнейший read. Подтверждённая собственная Figma-граница
+остаётся Dark PNG semantics; количество editable nodes — отчёт владельца.
