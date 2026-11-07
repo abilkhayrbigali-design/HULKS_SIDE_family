@@ -2340,3 +2340,41 @@ main {
     font-size: 10px;
   }
 }
+.editor-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.editor-fieldset:disabled {
+  opacity: 0.75;
+}
+.decision-result {
+  border: 1px solid #e1ebdc;
+  background: #f7faf4;
+  border-radius: 7px;
+  padding: 12px;
+  margin: 12px 0;
+  color: #6e865f;
+  font-size: 12px;
+}
+.decision-result > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.decision-result > span strong {
+  font-size: 13px;
+}
+.decision-result p {
+  font-size: 12px;
+}
+.form-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.form-fieldset:disabled {
+  opacity: 0.75;
+}

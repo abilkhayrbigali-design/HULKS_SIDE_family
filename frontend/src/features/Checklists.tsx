@@ -297,7 +297,7 @@ function ChecklistEditor({
   return (
     <section className="panel editor">
       <div className="panel-heading">
-        <button className="back-link" onClick={back}>
+        <button className="back-link" onClick={back} disabled={busy}>
           <ArrowLeft size={16} />К чек-листам
         </button>
         <span className="badge neutral">
@@ -310,356 +310,361 @@ function ChecklistEditor({
           onRetry={!detail && id ? () => setReload((v) => v + 1) : undefined}
         />
       )}
-      <div className="editor-meta">
-        <label className="field">
-          Название чек-листа
-          <input
-            value={name}
-            disabled={!!id}
-            onChange={(e) => {
-              setName(e.target.value);
-              setDirty(true);
-            }}
-            placeholder="Например, Качество поддержки"
-          />
-        </label>
-        {detail && (
+      <fieldset className="editor-fieldset" disabled={busy}>
+        <div className="editor-meta">
           <label className="field">
-            Загрузить версию в редактор
-            <select
-              value={view}
-              disabled={busy}
+            Название чек-листа
+            <input
+              value={name}
+              disabled={!!id}
               onChange={(e) => {
-                if (
-                  dirty &&
-                  !window.confirm(
-                    "Заменить несохранённые правки выбранной версией?",
+                setName(e.target.value);
+                setDirty(true);
+              }}
+              placeholder="Например, Качество поддержки"
+            />
+          </label>
+          {detail && (
+            <label className="field">
+              Загрузить версию в редактор
+              <select
+                value={view}
+                disabled={busy}
+                onChange={(e) => {
+                  if (
+                    dirty &&
+                    !window.confirm(
+                      "Заменить несохранённые правки выбранной версией?",
+                    )
                   )
-                )
-                  return;
-                const version = detail.versions.find(
-                  (v) => v.id === e.target.value,
-                );
-                if (version) {
-                  setCriteria(structuredClone(version.criteria));
-                  setView(version.id);
-                  setDirty(false);
-                  setSaved(false);
+                    return;
+                  const version = detail.versions.find(
+                    (v) => v.id === e.target.value,
+                  );
+                  if (version) {
+                    setCriteria(structuredClone(version.criteria));
+                    setView(version.id);
+                    setDirty(false);
+                    setSaved(false);
+                  }
+                }}
+              >
+                {detail.versions.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    v{v.version_number} · {date(v.created_at)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+        {id && (
+          <p className="muted">
+            Сохранение создаст v{base + 1}. Выбранная старая версия может
+            служить основой; существующие версии не изменяются.
+          </p>
+        )}
+        {error instanceof ApiError && error.status === 409 && (
+          <div className="warning-box">
+            <p>
+              Ваш ввод сохранён. Просмотрите последнюю версию в другом окне,
+              затем обновите базовый номер и сохраните свою редакцию отдельной
+              версией.
+            </p>
+            <button
+              className="button small"
+              onClick={async () => {
+                if (!id) return;
+                try {
+                  const d = await api.checklist(id);
+                  setDetail(d);
+                  setBase(d.current_version.version_number);
+                  setError(undefined);
+                } catch (e) {
+                  setError(e);
                 }
               }}
             >
-              {detail.versions.map((v) => (
-                <option key={v.id} value={v.id}>
-                  v{v.version_number} · {date(v.created_at)}
-                </option>
-              ))}
-            </select>
-          </label>
+              Обновить базовый номер без замены правок
+            </button>
+          </div>
         )}
-      </div>
-      {id && (
-        <p className="muted">
-          Сохранение создаст v{base + 1}. Выбранная старая версия может служить
-          основой; существующие версии не изменяются.
-        </p>
-      )}
-      {error instanceof ApiError && error.status === 409 && (
-        <div className="warning-box">
-          <p>
-            Ваш ввод сохранён. Просмотрите последнюю версию в другом окне, затем
-            обновите базовый номер и сохраните свою редакцию отдельной версией.
-          </p>
-          <button
-            className="button small"
-            onClick={async () => {
-              if (!id) return;
-              try {
-                const d = await api.checklist(id);
-                setDetail(d);
-                setBase(d.current_version.version_number);
-                setError(undefined);
-              } catch (e) {
-                setError(e);
-              }
-            }}
-          >
-            Обновить базовый номер без замены правок
-          </button>
+        <div className="editor-summary">
+          <span>
+            <strong>{criteria.length}</strong> критериев
+          </span>
+          <span>
+            Сумма весов{" "}
+            <strong>{criteria.reduce((n, c) => n + c.weight, 0)}</strong>
+          </span>
+          <small>Итог нормализуется до 100 по применимым весам.</small>
         </div>
-      )}
-      <div className="editor-summary">
-        <span>
-          <strong>{criteria.length}</strong> критериев
-        </span>
-        <span>
-          Сумма весов{" "}
-          <strong>{criteria.reduce((n, c) => n + c.weight, 0)}</strong>
-        </span>
-        <small>Итог нормализуется до 100 по применимым весам.</small>
-      </div>
-      <div className="criteria-editor-list">
-        {criteria.map((c, i) => (
-          <details key={c.id} open className="criterion-editor">
-            <summary>
-              <span className="criterion-index">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <strong>{c.name || "Новый критерий"}</strong>
-              <span className="badge neutral">
-                {c.type === "scale"
-                  ? "Шкала"
-                  : c.type === "flag"
-                    ? "Флаг"
-                    : "Да / Нет"}
-              </span>
-              <ChevronDown size={17} />
-            </summary>
-            <div className="criterion-editor-body">
-              <div className="form-grid">
+        <div className="criteria-editor-list">
+          {criteria.map((c, i) => (
+            <details key={c.id} open className="criterion-editor">
+              <summary>
+                <span className="criterion-index">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <strong>{c.name || "Новый критерий"}</strong>
+                <span className="badge neutral">
+                  {c.type === "scale"
+                    ? "Шкала"
+                    : c.type === "flag"
+                      ? "Флаг"
+                      : "Да / Нет"}
+                </span>
+                <ChevronDown size={17} />
+              </summary>
+              <div className="criterion-editor-body">
+                <div className="form-grid">
+                  <label className="field">
+                    Название
+                    <input
+                      value={c.name}
+                      onChange={(e) => update(i, { name: e.target.value })}
+                      placeholder="Что оцениваем"
+                    />
+                  </label>
+                  <label className="field">
+                    ID критерия
+                    <input value={c.id} readOnly />
+                    <small>Постоянный ID сохраняет связь с историей.</small>
+                  </label>
+                  <label className="field">
+                    Тип
+                    <select
+                      value={c.type}
+                      onChange={(e) => {
+                        const type = e.target.value as Criterion["type"];
+                        update(i, {
+                          type,
+                          weight: type === "flag" ? 0 : Math.max(c.weight, 10),
+                          allow_na: type === "flag" ? false : c.allow_na,
+                          na_rule: type === "flag" ? null : c.na_rule,
+                          scale:
+                            type === "scale"
+                              ? (c.scale ?? [
+                                  { value: 0, description: "" },
+                                  { value: 10, description: "" },
+                                ])
+                              : null,
+                        });
+                      }}
+                    >
+                      <option value="binary">Да / Нет</option>
+                      <option value="scale">Числовая шкала</option>
+                      <option value="flag">Флаг события / нарушения</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    Вес
+                    <input
+                      type="number"
+                      min={c.type === "flag" ? 0 : 0.01}
+                      step="any"
+                      disabled={c.type === "flag"}
+                      value={Number.isFinite(c.weight) ? c.weight : ""}
+                      onChange={(e) =>
+                        update(i, {
+                          weight:
+                            e.target.value === ""
+                              ? NaN
+                              : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                </div>
                 <label className="field">
-                  Название
-                  <input
-                    value={c.name}
-                    onChange={(e) => update(i, { name: e.target.value })}
-                    placeholder="Что оцениваем"
+                  Инструкция для AI
+                  <textarea
+                    rows={3}
+                    value={c.instruction}
+                    onChange={(e) => update(i, { instruction: e.target.value })}
+                    placeholder="Опишите действие, условия и основание оценки"
                   />
                 </label>
                 <label className="field">
-                  ID критерия
-                  <input value={c.id} readOnly />
-                  <small>Постоянный ID сохраняет связь с историей.</small>
-                </label>
-                <label className="field">
-                  Тип
-                  <select
-                    value={c.type}
-                    onChange={(e) => {
-                      const type = e.target.value as Criterion["type"];
-                      update(i, {
-                        type,
-                        weight: type === "flag" ? 0 : Math.max(c.weight, 10),
-                        allow_na: type === "flag" ? false : c.allow_na,
-                        na_rule: type === "flag" ? null : c.na_rule,
-                        scale:
-                          type === "scale"
-                            ? (c.scale ?? [
-                                { value: 0, description: "" },
-                                { value: 10, description: "" },
-                              ])
-                            : null,
-                      });
-                    }}
-                  >
-                    <option value="binary">Да / Нет</option>
-                    <option value="scale">Числовая шкала</option>
-                    <option value="flag">Флаг события / нарушения</option>
-                  </select>
-                </label>
-                <label className="field">
-                  Вес
+                  Раздел
                   <input
-                    type="number"
-                    min={c.type === "flag" ? 0 : 0.01}
-                    step="any"
+                    value={c.section ?? ""}
+                    onChange={(e) =>
+                      update(i, { section: e.target.value || null })
+                    }
+                    placeholder="Необязательно"
+                  />
+                </label>
+                {c.type === "scale" && (
+                  <div className="scale-editor">
+                    <strong>Ступени шкалы</strong>
+                    <p>
+                      Вклад = вес × ответ / максимум шкалы. Ответ должен
+                      совпадать с одной из ступеней.
+                    </p>
+                    {c.scale?.map((point, j) => (
+                      <div className="scale-row" key={j}>
+                        <label className="field">
+                          <span className="sr-only">Ступень {j + 1}</span>
+                          <input
+                            aria-label={`Значение ступени ${j + 1}`}
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={
+                              Number.isFinite(point.value) ? point.value : ""
+                            }
+                            onChange={(e) =>
+                              update(i, {
+                                scale: c.scale!.map((p, k) =>
+                                  k === j
+                                    ? {
+                                        ...p,
+                                        value:
+                                          e.target.value === ""
+                                            ? NaN
+                                            : Number(e.target.value),
+                                      }
+                                    : p,
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="field grow">
+                          <span className="sr-only">Описание ступени</span>
+                          <input
+                            aria-label={`Описание ступени ${j + 1}`}
+                            value={point.description}
+                            onChange={(e) =>
+                              update(i, {
+                                scale: c.scale!.map((p, k) =>
+                                  k === j
+                                    ? { ...p, description: e.target.value }
+                                    : p,
+                                ),
+                              })
+                            }
+                            placeholder="Основание оценки"
+                          />
+                        </label>
+                        <button
+                          aria-label={`Удалить ступень ${j + 1}`}
+                          className="icon-button danger"
+                          onClick={() =>
+                            update(i, {
+                              scale: c.scale!.filter((_, k) => k !== j),
+                            })
+                          }
+                        >
+                          <Trash2 size={17} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      className="button small"
+                      onClick={() =>
+                        update(i, {
+                          scale: [
+                            ...c.scale!,
+                            {
+                              value:
+                                Math.max(
+                                  ...c.scale!.map((p) =>
+                                    Number.isFinite(p.value) ? p.value : 0,
+                                  ),
+                                  0,
+                                ) + 5,
+                              description: "",
+                            },
+                          ],
+                        })
+                      }
+                    >
+                      <Plus size={15} />
+                      Ступень
+                    </button>
+                  </div>
+                )}
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={c.allow_na}
                     disabled={c.type === "flag"}
-                    value={Number.isFinite(c.weight) ? c.weight : ""}
                     onChange={(e) =>
                       update(i, {
-                        weight:
-                          e.target.value === "" ? NaN : Number(e.target.value),
+                        allow_na: e.target.checked,
+                        na_rule: e.target.checked ? "" : null,
                       })
                     }
                   />
+                  Разрешить N/A — критерий может быть неприменим
                 </label>
+                {c.allow_na && (
+                  <label className="field">
+                    Когда разрешён N/A
+                    <textarea
+                      rows={2}
+                      value={c.na_rule ?? ""}
+                      onChange={(e) => update(i, { na_rule: e.target.value })}
+                    />
+                  </label>
+                )}
+                {c.type === "flag" && (
+                  <div className="notice">
+                    Флаг имеет вес 0. «Да» означает обнаруженное событие и
+                    показывается отдельно от баллов.
+                  </div>
+                )}
+                <button
+                  className="button danger subtle small"
+                  onClick={() => {
+                    setCriteria((items) => items.filter((_, j) => j !== i));
+                    setDirty(true);
+                    setSaved(false);
+                  }}
+                >
+                  <Trash2 size={15} />
+                  Удалить критерий
+                </button>
               </div>
-              <label className="field">
-                Инструкция для AI
-                <textarea
-                  rows={3}
-                  value={c.instruction}
-                  onChange={(e) => update(i, { instruction: e.target.value })}
-                  placeholder="Опишите действие, условия и основание оценки"
-                />
-              </label>
-              <label className="field">
-                Раздел
-                <input
-                  value={c.section ?? ""}
-                  onChange={(e) =>
-                    update(i, { section: e.target.value || null })
-                  }
-                  placeholder="Необязательно"
-                />
-              </label>
-              {c.type === "scale" && (
-                <div className="scale-editor">
-                  <strong>Ступени шкалы</strong>
-                  <p>
-                    Вклад = вес × ответ / максимум шкалы. Ответ должен совпадать
-                    с одной из ступеней.
-                  </p>
-                  {c.scale?.map((point, j) => (
-                    <div className="scale-row" key={j}>
-                      <label className="field">
-                        <span className="sr-only">Ступень {j + 1}</span>
-                        <input
-                          aria-label={`Значение ступени ${j + 1}`}
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={
-                            Number.isFinite(point.value) ? point.value : ""
-                          }
-                          onChange={(e) =>
-                            update(i, {
-                              scale: c.scale!.map((p, k) =>
-                                k === j
-                                  ? {
-                                      ...p,
-                                      value:
-                                        e.target.value === ""
-                                          ? NaN
-                                          : Number(e.target.value),
-                                    }
-                                  : p,
-                              ),
-                            })
-                          }
-                        />
-                      </label>
-                      <label className="field grow">
-                        <span className="sr-only">Описание ступени</span>
-                        <input
-                          aria-label={`Описание ступени ${j + 1}`}
-                          value={point.description}
-                          onChange={(e) =>
-                            update(i, {
-                              scale: c.scale!.map((p, k) =>
-                                k === j
-                                  ? { ...p, description: e.target.value }
-                                  : p,
-                              ),
-                            })
-                          }
-                          placeholder="Основание оценки"
-                        />
-                      </label>
-                      <button
-                        aria-label={`Удалить ступень ${j + 1}`}
-                        className="icon-button danger"
-                        onClick={() =>
-                          update(i, {
-                            scale: c.scale!.filter((_, k) => k !== j),
-                          })
-                        }
-                      >
-                        <Trash2 size={17} />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    className="button small"
-                    onClick={() =>
-                      update(i, {
-                        scale: [
-                          ...c.scale!,
-                          {
-                            value:
-                              Math.max(
-                                ...c.scale!.map((p) =>
-                                  Number.isFinite(p.value) ? p.value : 0,
-                                ),
-                                0,
-                              ) + 5,
-                            description: "",
-                          },
-                        ],
-                      })
-                    }
-                  >
-                    <Plus size={15} />
-                    Ступень
-                  </button>
-                </div>
-              )}
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={c.allow_na}
-                  disabled={c.type === "flag"}
-                  onChange={(e) =>
-                    update(i, {
-                      allow_na: e.target.checked,
-                      na_rule: e.target.checked ? "" : null,
-                    })
-                  }
-                />
-                Разрешить N/A — критерий может быть неприменим
-              </label>
-              {c.allow_na && (
-                <label className="field">
-                  Когда разрешён N/A
-                  <textarea
-                    rows={2}
-                    value={c.na_rule ?? ""}
-                    onChange={(e) => update(i, { na_rule: e.target.value })}
-                  />
-                </label>
-              )}
-              {c.type === "flag" && (
-                <div className="notice">
-                  Флаг имеет вес 0. «Да» означает обнаруженное событие и
-                  показывается отдельно от баллов.
-                </div>
-              )}
-              <button
-                className="button danger subtle small"
-                onClick={() => {
-                  setCriteria((items) => items.filter((_, j) => j !== i));
-                  setDirty(true);
-                  setSaved(false);
-                }}
-              >
-                <Trash2 size={15} />
-                Удалить критерий
-              </button>
-            </div>
-          </details>
-        ))}
-      </div>
-      <div className="editor-actions">
-        <button
-          className="button"
-          onClick={() => {
-            setCriteria((items) => [...items, newCriterion()]);
-            setDirty(true);
-            setSaved(false);
-          }}
-        >
-          <Plus size={17} />
-          Добавить критерий
-        </button>
-        <div>
-          {saved && (
-            <span className="saved-label" role="status">
-              <Check size={16} />
-              Версия сохранена
-            </span>
-          )}
-          <button
-            className="button primary"
-            disabled={busy || (!detail && !!id)}
-            onClick={() => void save()}
-          >
-            <Save size={17} />
-            {busy
-              ? "Сохраняем…"
-              : id
-                ? "Сохранить новую версию"
-                : "Создать чек-лист"}
-          </button>
+            </details>
+          ))}
         </div>
-      </div>
+        <div className="editor-actions">
+          <button
+            className="button"
+            onClick={() => {
+              setCriteria((items) => [...items, newCriterion()]);
+              setDirty(true);
+              setSaved(false);
+            }}
+          >
+            <Plus size={17} />
+            Добавить критерий
+          </button>
+          <div>
+            {saved && (
+              <span className="saved-label" role="status">
+                <Check size={16} />
+                Версия сохранена
+              </span>
+            )}
+            <button
+              className="button primary"
+              disabled={busy || (!detail && !!id)}
+              onClick={() => void save()}
+            >
+              <Save size={17} />
+              {busy
+                ? "Сохраняем…"
+                : id
+                  ? "Сохранить новую версию"
+                  : "Создать чек-лист"}
+            </button>
+          </div>
+        </div>
+      </fieldset>
     </section>
   );
 }
