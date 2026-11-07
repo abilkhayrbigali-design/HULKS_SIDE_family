@@ -198,3 +198,10 @@ def test_worker_owned_safe_failure_codes_are_comparable(code):
     report = compare_predictions(labels, predictions, split="tune")
     assert report["overall"]["failed"] == 1
     assert report["overall"]["criterion_exact_accuracy"] == 0
+
+
+def test_completed_prediction_without_recorded_attempt_is_rejected():
+    labels, predictions = documents()
+    predictions["cases"][0]["result"]["usage"]["request_count"] = 0
+    with pytest.raises(ValidationError):
+        compare_predictions(labels, predictions, split="tune")
