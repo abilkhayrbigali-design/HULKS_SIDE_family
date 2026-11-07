@@ -125,6 +125,10 @@ export function ConversationView({
   const transcriptRoot = useRef<HTMLDivElement>(null);
   const transcriptScroll = useRef(0);
   const pendingEvidence = useRef<string | null>(null);
+  const lastEvidence = useRef<string | null>(null);
+  const readingAnchor = useRef<{ id: string; offset: number } | null>(null);
+  const evidenceVisible = useRef(false);
+  const viewportSize = useRef({ width: 0, height: 0 });
   const [focusedCriterion, setFocusedCriterion] = useState<string | null>(null);
   const [loadedContext, setLoadedContext] = useState("");
   const [conversation, setConversation] = useState<ConversationDetail | null>(
@@ -159,6 +163,9 @@ export function ConversationView({
     setFocusedCriterion(null);
     transcriptScroll.current = 0;
     pendingEvidence.current = null;
+    lastEvidence.current = null;
+    readingAnchor.current = null;
+    evidenceVisible.current = false;
     setAppealCriterion(null);
     async function load() {
       try {
@@ -254,7 +261,34 @@ export function ConversationView({
       clearTimeout(timer);
     };
   }, [id, evaluationId, evaluation?.id, polling, reload]);
-  const applyEvidenceScroll = () => {
+  const rememberReadingPosition = () => {
+    const viewport = transcriptRoot.current?.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]',
+    );
+    if (!viewport || !viewport.clientHeight) return;
+    transcriptScroll.current = viewport.scrollTop;
+    const bounds = viewport.getBoundingClientRect();
+    const selected = lastEvidence.current
+      ? refs.current[lastEvidence.current]
+      : null;
+    const selectedBounds = selected?.getBoundingClientRect();
+    evidenceVisible.current =
+      !!selectedBounds &&
+      selectedBounds.top >= bounds.top &&
+      selectedBounds.bottom <= bounds.bottom;
+    const first = Array.from(
+      viewport.querySelectorAll<HTMLDivElement>(".message"),
+    ).find(
+      (element) => element.getBoundingClientRect().bottom > bounds.top + 1,
+    );
+    readingAnchor.current = first
+      ? {
+          id: first.id.replace(/^message-/, ""),
+          offset: first.getBoundingClientRect().top - bounds.top,
+        }
+      : null;
+  };
+  const applyEvidenceScroll = (focus = true) => {
     if (!isCurrent()) return;
     const viewport = transcriptRoot.current?.querySelector<HTMLElement>(
       '[data-slot="scroll-area-viewport"]',
@@ -272,8 +306,63 @@ export function ConversationView({
     viewport.scrollTo({ top: Math.max(0, top), behavior: "auto" });
     transcriptScroll.current = viewport.scrollTop;
     pendingEvidence.current = null;
-    target.focus({ preventScroll: true });
+    if (focus) target.focus({ preventScroll: true });
+    rememberReadingPosition();
   };
+  useEffect(() => {
+    const viewport = transcriptRoot.current?.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]',
+    );
+    if (!viewport) return;
+    let active = true;
+    viewportSize.current = {
+      width: viewport.clientWidth,
+      height: viewport.clientHeight,
+    };
+    const observer = new ResizeObserver(() => {
+      if (
+        !active ||
+        !isCurrent() ||
+        !viewport.clientWidth ||
+        !viewport.clientHeight
+      )
+        return;
+      const previous = viewportSize.current;
+      if (
+        previous.width === viewport.clientWidth &&
+        previous.height === viewport.clientHeight
+      )
+        return;
+      const anchor = readingAnchor.current,
+        keepEvidence = evidenceVisible.current;
+      viewportSize.current = {
+        width: viewport.clientWidth,
+        height: viewport.clientHeight,
+      };
+      requestAnimationFrame(() => {
+        if (!active || !isCurrent()) return;
+        if (keepEvidence && lastEvidence.current) {
+          pendingEvidence.current = lastEvidence.current;
+          applyEvidenceScroll(false);
+          return;
+        }
+        const target = anchor ? refs.current[anchor.id] : null;
+        if (target && anchor) {
+          const offset = Math.max(anchor.offset, -target.clientHeight + 1);
+          viewport.scrollTop +=
+            target.getBoundingClientRect().top -
+            viewport.getBoundingClientRect().top -
+            offset;
+          rememberReadingPosition();
+        }
+      });
+    });
+    observer.observe(viewport);
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
+  }, [id, evaluationId]);
   useEffect(() => {
     requestAnimationFrame(() => {
       if (pendingEvidence.current) {
@@ -283,7 +372,12 @@ export function ConversationView({
       const viewport = transcriptRoot.current?.querySelector<HTMLElement>(
         '[data-slot="scroll-area-viewport"]',
       );
-      if (viewport) viewport.scrollTop = transcriptScroll.current;
+      if (
+        viewport &&
+        viewport.clientWidth === viewportSize.current.width &&
+        viewport.clientHeight === viewportSize.current.height
+      )
+        viewport.scrollTop = transcriptScroll.current;
     });
   }, [workspace.activePane, workspace.narrow]);
   const showEvidence = (evidence: Evidence) => {
@@ -291,8 +385,9 @@ export function ConversationView({
     const ids = evidenceIds(evidence, conversation.messages);
     setHighlight(ids);
     pendingEvidence.current = ids[0] ?? null;
+    lastEvidence.current = ids[0] ?? null;
     if (workspace.narrow) workspace.setActivePane("transcript");
-    requestAnimationFrame(applyEvidenceScroll);
+    requestAnimationFrame(() => applyEvidenceScroll());
   };
   const start = async () => {
     if (!versionId) return;
@@ -440,8 +535,13 @@ export function ConversationView({
             ref={transcriptRoot}
             onScrollCapture={(event) => {
               const target = event.target as HTMLElement;
-              if (target.dataset.slot === "scroll-area-viewport")
-                transcriptScroll.current = target.scrollTop;
+              if (
+                target.dataset.slot === "scroll-area-viewport" &&
+                !pendingEvidence.current &&
+                target.clientWidth === viewportSize.current.width &&
+                target.clientHeight === viewportSize.current.height
+              )
+                rememberReadingPosition();
             }}
           >
             {loading || !ready ? (
@@ -503,7 +603,14 @@ export function ConversationView({
                 : "Оценивается оператор · все роли сохранены как контекст"}
             </span>
             {highlight.length > 0 && (
-              <button className="text-button" onClick={() => setHighlight([])}>
+              <button
+                className="text-button"
+                onClick={() => {
+                  setHighlight([]);
+                  lastEvidence.current = null;
+                  evidenceVisible.current = false;
+                }}
+              >
                 Снять выделение
               </button>
             )}

@@ -112,6 +112,7 @@ test("neutral selection, theme, keyboard resize and collapse preserve evidence",
   const before = (await page.locator("#queue-panel").boundingBox())!.width;
   await handle.focus();
   await handle.press("ArrowRight");
+  await expect(handle).toBeFocused();
   await expect
     .poll(async () => (await page.locator("#queue-panel").boundingBox())!.width)
     .not.toBe(before);
@@ -170,6 +171,17 @@ test("narrow evidence scroll has priority over restored transcript scroll", asyn
     "transcript",
   );
   await expect(page.locator("#message-m0118")).toHaveClass(/highlight/);
+  await expect
+    .poll(() =>
+      page.locator("#message-m0118").evaluate((element) => {
+        const b = element.getBoundingClientRect(),
+          v = element
+            .closest('[data-slot="scroll-area-viewport"]')!
+            .getBoundingClientRect();
+        return b.top >= v.top && b.bottom <= v.bottom;
+      }),
+    )
+    .toBe(true);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -179,6 +191,50 @@ test("narrow evidence scroll has priority over restored transcript scroll", asyn
     path: "test-results/workspace-narrow.png",
     fullPage: true,
   });
+  await viewport(page).evaluate(
+    (element) =>
+      new Promise<void>((resolve) => {
+        element.addEventListener(
+          "scroll",
+          () => requestAnimationFrame(() => resolve()),
+          { once: true },
+        );
+        const message = document.getElementById("message-m0050")!;
+        element.scrollTop +=
+          message.getBoundingClientRect().top -
+          element.getBoundingClientRect().top;
+      }),
+  );
+  await expect
+    .poll(() =>
+      viewport(page).evaluate((element) =>
+        Math.abs(
+          document.getElementById("message-m0050")!.getBoundingClientRect()
+            .top - element.getBoundingClientRect().top,
+        ),
+      ),
+    )
+    .toBeLessThan(2);
+  await page.setViewportSize({ width: 800, height: 900 });
+  await expect
+    .poll(() =>
+      viewport(page).evaluate((element) =>
+        Math.abs(
+          document.getElementById("message-m0050")!.getBoundingClientRect()
+            .top - element.getBoundingClientRect().top,
+        ),
+      ),
+    )
+    .toBeLessThan(2);
+  expect(
+    await page.locator("#message-m0118").evaluate((element) => {
+      const b = element.getBoundingClientRect(),
+        v = element
+          .closest('[data-slot="scroll-area-viewport"]')!
+          .getBoundingClientRect();
+      return b.bottom > v.top && b.top < v.bottom;
+    }),
+  ).toBe(false);
 });
 test("failed selected-run load never presents an old successful score", async ({
   page,
