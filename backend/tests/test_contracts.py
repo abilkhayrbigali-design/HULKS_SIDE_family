@@ -124,13 +124,23 @@ def test_workspace_fixtures_preserve_archive_context_and_immutable_decisions():
     assert confirmed["decision"]["result"]["answer"] is False
     assert confirmed["current"]["answer"] is True
     assert overridden["decision"]["result"]["answer"] is True
+    assert overridden["decision"]["result"]["explanation"] == overridden["decision"]["reason"]
+    assert {key: overridden["current"][key] for key in RESULT_FIELDS} == overridden["decision"][
+        "result"
+    ]
+    final_next_step = next(
+        c for c in before["final"]["criteria"] if c["criterion_id"] == "next_step"
+    )
+    assert {key: final_next_step[key] for key in RESULT_FIELDS} == overridden["decision"]["result"]
     assert confirmed["original"]["answer"] == overridden["original"]["answer"] is False
     assert confirmed["decision"]["expected_revision"] == 0
     assert overridden["decision"]["expected_revision"] == 1
     assert (
         confirmed["current_revision"] == overridden["current_revision"] == before["revision"] == 2
     )
-    assert fixture("workspace/decision.override.response.json")["evaluation"] == before
+    decision_response = fixture("workspace/decision.override.response.json")
+    assert decision_response["evaluation"] == before
+    assert decision_response["appeal"] == overridden
 
 
 @pytest.mark.parametrize(

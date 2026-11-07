@@ -111,7 +111,7 @@
         "criterion_id": "management",
         "applicability": "applicable",
         "answer": 10,
-        "explanation": "Последовательность действий понятна; оскорбление учитывается в эмпатии и отдельном флаге.",
+        "explanation": "Порядок действий понятен: уточнение, проверка и доставка идут последовательно.",
         "evidence": [
           {
             "kind": "range",
@@ -223,7 +223,7 @@
         "criterion_id": "next_step",
         "applicability": "applicable",
         "answer": true,
-        "explanation": "В m0017 дан конкретный следующий шаг. Исходный пропуск учебной разметки исправлен.",
+        "explanation": "В новой учебной версии m0017 дан конкретный следующий шаг.",
         "evidence": [
           {
             "kind": "message",
@@ -376,7 +376,7 @@
         "criterion_id": "management",
         "applicability": "applicable",
         "answer": 10,
-        "explanation": "Последовательность действий понятна; оскорбление учитывается в эмпатии и отдельном флаге.",
+        "explanation": "Порядок действий понятен: уточнение, проверка и доставка идут последовательно.",
         "evidence": [
           {
             "kind": "range",
@@ -488,7 +488,7 @@
         "criterion_id": "next_step",
         "applicability": "applicable",
         "answer": true,
-        "explanation": "В m0017 дан конкретный следующий шаг. Исходный пропуск учебной разметки исправлен.",
+        "explanation": "В новой учебной версии m0017 дан конкретный следующий шаг.",
         "evidence": [
           {
             "kind": "message",

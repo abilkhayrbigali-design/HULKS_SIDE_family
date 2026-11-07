@@ -20,7 +20,7 @@
           "criterion_id": "next_step",
           "applicability": "applicable",
           "answer": true,
-          "explanation": "В m0017 дан конкретный следующий шаг. Исходный пропуск учебной разметки исправлен.",
+          "explanation": "Повторная проверка m0017 подтверждает конкретный следующий шаг.",
           "evidence": [
             {
               "kind": "message",
@@ -53,7 +53,7 @@
         "criterion_id": "next_step",
         "applicability": "applicable",
         "answer": true,
-        "explanation": "В m0017 дан конкретный следующий шаг. Исходный пропуск учебной разметки исправлен.",
+        "explanation": "Повторная проверка m0017 подтверждает конкретный следующий шаг.",
         "evidence": [
           {
             "kind": "message",
@@ -122,7 +122,7 @@
         "criterion_id": "next_step",
         "applicability": "applicable",
         "answer": true,
-        "explanation": "В m0017 дан конкретный следующий шаг. Исходный пропуск учебной разметки исправлен.",
+        "explanation": "Повторная проверка m0017 подтверждает конкретный следующий шаг.",
         "evidence": [
           {
             "kind": "message",

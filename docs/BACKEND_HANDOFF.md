@@ -22,6 +22,11 @@ current/archived snapshots, original65.22/final69.57, отдельные gross/c
 `git diff --check`. Нурсултан независимо проверил wire-схемы, ссылки и полные
 Assessment серверным Decimal-расчётом. Живые OpenAI-вызовы и Ground Truth не
 использовались; runtime backend/scoring/provider остаются без изменений.
+Независимый reviewer выявил и исправлены два fixture-only замечания: override
+reason/result.explanation согласованы с actual API; current management explanation
+больше не ссылается на оскорбление архивной версии. Связь immutable decision.result,
+current/final и причины теперь проверяется явно; после исправлений contract suite
+повторно прошёл 50 тестов. ID/ответы/диапазоны/баллы не менялись.
 Финальная UI-проверка snapshot/history будет выполнена после React checkpoint;
 новый Q-01 относится к текущему инкременту, а не к историческому ревью MVP.
 
