@@ -89,11 +89,11 @@ npm run test:e2e
 | Область | Статус | Фактическая проверка/ограничение |
 | --- | --- | --- |
 | Подготовка | IN_PROGRESS | Контракты прочитаны, acceptance и ownership согласованы. |
-| Editable Figma | NOT_RUN | Ожидается базовый файл и отчёт Абулхаира. |
+| Editable Figma | PARTIAL | Dark frame 3:103 просмотрен по corrected PNG: базовая семантика PASS. Native counts/0IMAGE получены от Абулхаира; независимый get_metadata ограничен Starter MCP quota. Light/narrow/error/history ещё не проверены. |
 | Synthetic workspace fixtures | PASS | Read-only набор Чингиза ce856d8c2577e247eee3daa99c849a31b10b7cf0: все 10 wire JSON валидны по canonical schemas; полный пересчёт original/final совпал, IDs снимков согласованы, 120 сообщений/4 роли и 12/13 критериев. |
 | Native CUA в дочернем агенте | NOT_AVAILABLE | Штатный cua.getState вернул пустые apps/browsers. Root проверяет свой native surface отдельно; согласован Playwright QA обычного HTTP React app, без file:// и обходов. |
-| React desktop/narrow/themes | NOT_RUN | Ожидается checkpoint и HTTP URL Артёма. |
-| Evidence/appeals/history/errors | NOT_RUN | План W-02—W-10; результатов пока нет. |
+| React desktop/narrow/themes | PASS_CHECKPOINT | Независимый HTTP Playwright прогон R 6ffdc7f: desktop1440×900, narrow390×844, light/dark, keyboard splitter и resize. Это промежуточный checkpoint, не приёмка последующего delta. |
+| Evidence/appeals/history/errors | PARTIAL | На 6ffdc7f подтверждены frozen snapshots, system evidence, missing range118–120, accepted decision history,503/no-key и сохранение draft при tab/resize/failed submit. Draft isolation между criterion/context и narrow-close ещё ожидают финальный delta R. |
 | Живой AI и модельная точность | OUT_OF_SCOPE | Запрещены текущим поручением; UI-тесты их не подтверждают. |
 
 Итоговый отчёт содержит фактические PASS/FAIL/NOT_RUN, SHA, шаги, viewport, путь каждого
@@ -101,7 +101,11 @@ npm run test:e2e
 
 ### Проверенный synthetic checkpoint
 
-Fixture SHA: `ce856d8c2577e247eee3daa99c849a31b10b7cf0` (ветка Чингиза). Независимая
+Первичная проверка: `ce856d8c2577e247eee3daa99c849a31b10b7cf0` (ветка Чингиза).
+Финальный candidate: `fcefd7a775f43fdce78e5011cd4195bea693f899`; отдельно просмотрен
+его текстовый delta: объяснение override совпадает с причиной решения во всех копиях,
+а объяснения нового запуска больше не описывают старую ошибку. IDs, ответы, доказательства,
+веса и итоги не менялись; арифметика повторно не запускалась. Независимая
 read-only Python-проверка использовала `Draft202012Validator` из canonical OpenAPI и
 `calculate_assessment` из исходной N-базы; provider и сетевые клиенты не вызывались.
 Для каждого original/final сравнивался полный Assessment, а не один итог:
@@ -115,3 +119,86 @@ read-only Python-проверка использовала `Draft202012Validator
 
 Первоначальный next_step=false в архиве — специально ошибочный **учебный** ответ для
 демонстрации апелляции. Эти числа не являются результатом AI или человеческой разметкой.
+
+### Figma Dark: визуальный semantic read
+
+[Основной Design, node 3:103](https://www.figma.com/design/vEvqJlR06dJtBMkgZUQRwl?node-id=3-103).
+Лично просмотрен PNG:
+`/home/abilkhayr/.codex/visualizations/2026/11/07/01a1b701-6abb-74a2-8720-d09bf72174aa/figma-redesign/cqa-workspace-dark.png`.
+
+Видны нейтральная выбранная строка, зелёный inclusive evidence m0001–m0002 и teal pass
+с текстовым ответом. Приветствие без имени корректно помечено «Нет»; идентификация N/A
+исключает вес20 и даёт применимый вес80. Original/final81.25 рядом, flag с весом0 отдельно,
+synthetic/AI-not-run и отсутствие решений проверяющего подписаны. Это визуальное чтение
+состояния, не проверка интерактивных переходов или модели.
+
+Передана конкретная UX-поправка: «Баллы» лучше назвать «Вклад /100» либо объяснить
+нормализацию, чтобы 18.75 рядом с исходным весом15 не воспринималось как ошибка.
+
+Отчёт владельца: 247 descendants, 65 Frame, 39 Vector, 117 Text, 26 Instance, 0 Image fills,
+шрифт Inter и переиспользуемые компоненты/переменные. Эти количества **не пересчитаны
+Нурсултаном**: штатный read-only get_metadata вернул Starter-plan MCP tool call limit.
+Оплата, upgrade или обход ограничения не выполнялись. Независимая граница — PNG semantics;
+редактируемость учитывается по фактическому отчёту владельца Figma.
+
+### Независимый React HTTP checkpoint
+
+Код Артёма: `6ffdc7f979b57523459074bd3d86a04d14e1fe30`, HTTP `127.0.0.1:5173`.
+Управляемые ответы поданы только через test helper `mockWorkspaceAPI`/`mockAPI`;
+продуктовые файлы Нурсултаном не изменялись. Никакого provider/model вызова нет.
+
+Четыре независимых сценария **PASS** (два первоначальных timeout исправлены заменой
+тестового exact `getByLabel` на доступное textbox role; это не признано дефектом UI):
+
+1. **Desktop1440×900:** архивный transcript/checklist, 12 строк и original65.22/final69.57;
+   identification выделяет system m0008 внутри m0006–m0009. Closing переносит transcript
+   к m0118–m0120, сохраняя URL выбранного запуска, page/queue scroll. ArrowLeft на splitter
+   действительно меняет ширину. После Light switch исторический confirm всё ещё accepted=false
+   при current=true; второй override и revision сохранены.
+2. **Narrow390×844:** после scroll1000 → «Качество» → closing открывается «Диалог», первый
+   target целиком находится внутри transcript viewport и получает focus. Проверено отсутствие
+   горизонтального page overflow; draft сохраняется при смене вкладки и возврате на desktop.
+3. **Ошибки:** AI_NOT_CONFIGURED503 не меняет выбранный исторический запуск; failed appeal
+   submit оставляет введённый текст. Неуспешная отправка не превращается в успешную оценку.
+4. **Частичная шкала:** synthetic5/10 имеет максимум шкалы и amber partial status,
+   а не безусловный full-pass. Проверка не оценивает содержательную правильность AI.
+
+Реально выполненная команда временного независимого runner:
+
+```bash
+./node_modules/.bin/playwright test \
+  --config=/tmp/cqa-nursultan-http-qa/playwright.config.ts
+```
+
+Runner/config находятся вне tracked repo; его imports переиспользуют helper Артёма.
+Последующая выборочная команда `--grep 'independent narrow|independent no-key'` дала 2/2
+после исправления тестового locator. Desktop и partial прошли первоначально. Постоянные
+frontend-тесты принадлежат R; root отдельно сообщил о 19 E2E, TypeScript, 7 unit и build.
+Эти результаты не прибавляются к независимым четырём проверкам Нурсултана.
+
+Артефакты под
+`/home/abilkhayr/.codex/visualizations/2026/11/07/01a1b701-6abb-74a2-8720-d09bf72174aa/workspace-qa/`:
+
+| PNG | Что зафиксировано |
+| --- | --- |
+| desktop-dark-system-context.png | Архивный run, system evidence в диапазоне проверки личности. |
+| desktop-dark-missing-action.png | Missing closing, три реплики118–120 и отдельный gross flag. |
+| desktop-light-immutable-history.png | Light, сохранённый machine/reviewer context и история. |
+| narrow-evidence-return.png | Narrow target/focus после перехода из качества. |
+| desktop-resize-preserved-draft.png | Возврат на desktop с сохранённым draft. |
+| desktop-safe-error-unsent-draft.png | Безопасная ошибка и несохранённый комментарий. |
+| desktop-partial-scale.png | Partial5/10, amber и нормализованный вклад. |
+| desktop-light-stable.png | Light после завершения цветовых transitions; foreground RGB24/27/33. |
+
+Скриншоты содержат только synthetic данные. Первые кадры сделаны с обычными animations;
+для итогового визуального сравнения применяется стандартный screenshot option
+`animations: disabled`, чтобы не принимать промежуточный fade за финальный contrast.
+
+Отдельно проверен краткий narrow visibility flash: первый DOM read видел 18 переходных
+visible descendants при hidden quality pane; следующий read уже не видел их. Поэтому
+первоначальное предположение о постоянном P2 leakage **не подтвердилось**. Это переходный
+кадр, не открытый подтверждённый blocker; исходный кадр сохранён как
+`checkpoint-6ff-narrow-visibility-flash.png`. Финальный delta R проверяется отдельно.
+
+Native CUA root сообщил как отдельную проверку обычного API/синтетического HTTP: импорт,
+AI_NOT_CONFIGURED503 и безопасная консоль PASS. Нурсултан не приписывает себе этот прогон.
