@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
+from openapi_spec_validator import validate
 from sqlalchemy import inspect
 
 from app.config import Settings
@@ -16,11 +17,56 @@ from app.main import create_app
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = json.loads((ROOT / "contracts/openapi.json").read_text())
+FIXTURES = ROOT / "data/fixtures/synthetic"
 
 
 def assert_contract(name, payload):
     schema = {"$ref": f"#/components/schemas/{name}", "components": CONTRACT["components"]}
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(payload)
+
+
+def test_runtime_openapi_documents_contract_operations_and_examples(settings):
+    runtime = create_app(settings).openapi()
+    validate(runtime)
+    assert set(runtime["paths"]) == set(CONTRACT["paths"])
+    manifest = json.loads((FIXTURES / "manifest.json").read_text())
+    examples = {}
+    for example in manifest["fixtures"]:
+        examples.setdefault(example["schema"], []).append(
+            json.loads((FIXTURES / example["file"]).read_text())
+        )
+    for path, operations in CONTRACT["paths"].items():
+        assert set(runtime["paths"][path]) == set(operations)
+        for method, expected in operations.items():
+            actual = runtime["paths"][path][method]
+            assert set(expected["responses"]) <= set(actual["responses"])
+            pairs = [
+                (response, actual["responses"][status])
+                for status, response in expected["responses"].items()
+            ]
+            if "requestBody" in expected:
+                pairs.append((expected["requestBody"], actual["requestBody"]))
+            for expected_body, actual_body in pairs:
+                expected_schema = expected_body["content"]["application/json"]["schema"]
+                actual_schema = actual_body["content"]["application/json"]["schema"]
+                schema_name = expected_schema["$ref"].rsplit("/", 1)[1]
+                validator = Draft202012Validator(
+                    {**actual_schema, "components": runtime["components"]},
+                    format_checker=FormatChecker(),
+                )
+                for example in examples.get(schema_name, []):
+                    validator.validate(example)
+
+
+def test_verbose_library_payload_logs_are_suppressed(caplog):
+    settings = Settings(
+        _env_file=None, CQA_DATABASE_URL="sqlite:///:memory:", CQA_LOG_LEVEL="DEBUG"
+    )
+    create_app(settings)
+    with caplog.at_level(logging.DEBUG):
+        for name in ("openai", "httpx", "httpcore", "sqlalchemy.engine", "sqlalchemy.pool"):
+            logging.getLogger(name).warning("synthetic-private-library-payload")
+    assert "synthetic-private-library-payload" not in caplog.text
 
 
 def test_startup_migrates_and_seeds_one_checklist(settings, caplog):

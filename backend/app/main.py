@@ -23,6 +23,7 @@ from app.config import ConfigurationUnavailable, Settings
 from app.db.migrate import migrate
 from app.db.session import session_factory
 from app.diagnostics import log_internal_error
+from app.schemas.responses import ErrorResponse
 from app.services.seed import seed
 
 logger = logging.getLogger("cqa.requests")
@@ -186,7 +187,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise RuntimeError("Application shutdown failed. Check safe server logs.") from None
             lifecycle_logger.info("event=application_stopped")
 
-    application = FastAPI(title="CQA API", version="0.1.0", lifespan=lifespan)
+    application = FastAPI(
+        title="CQA API",
+        version="0.1.0",
+        lifespan=lifespan,
+        responses={
+            status: {"model": ErrorResponse} for status in (400, 404, 405, 409, 422, 500, 502, 503)
+        },
+    )
     application.state.settings = configured
     logging.basicConfig(level=configured.log_level, format="%(levelname)s %(name)s %(message)s")
     logging.getLogger("cqa").setLevel(configured.log_level)
