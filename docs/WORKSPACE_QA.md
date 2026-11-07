@@ -201,7 +201,7 @@ frontend-тесты принадлежат R; root отдельно сообщи
 visible descendants при hidden quality pane; следующий read уже не видел их. Поэтому
 первоначальное предположение о постоянном P2 leakage **не подтвердилось**. Это переходный
 кадр, не открытый подтверждённый blocker; исходный кадр сохранён как
-`checkpoint-6ff-narrow-visibility-flash.png`. Финальный delta R проверяется отдельно.
+`checkpoint-6ff-narrow-visibility-flash.png`. Результаты финального delta R приведены ниже.
 
 Native CUA root сообщил как отдельную проверку обычного API/синтетического HTTP: импорт,
 AI_NOT_CONFIGURED503 и безопасная консоль PASS. Нурсултан не приписывает себе этот прогон.
@@ -218,7 +218,8 @@ AI_NOT_CONFIGURED503 и безопасная консоль PASS. Нурсулт
   не переносит комментарии между снимками и восстанавливает правильные значения.
   Ключей appeal/draft в localStorage нет; session-only cache не выдаётся за сохранённое решение.
 - На800×900 «Свернуть оценку» возвращает «Диалог» и видимый полезный focus за пределами
-  скрытой quality pane; выбранные evidence и transcript остаются доступны.
+  скрытой quality pane; её aria-hidden/inert проверены непосредственно в DOM,
+  выбранные evidence и transcript остаются доступны.
 - Пользовательский supervisor_offer=true нейтрален и не получает negative badge;
   gross_error=false и100/100 остаются отдельными от этого события.
 - У неактивной quality pane сразу visibility hidden/aria-hidden/inert и **0** видимых
