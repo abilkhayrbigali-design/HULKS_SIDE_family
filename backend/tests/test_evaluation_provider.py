@@ -293,3 +293,86 @@ def test_outer_async_timeout_also_bounds_injected_clients():
         assert err.value.provenance["usage"]["request_count"] == 1
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "field,value", [("output", None), ("output", []), ("status", "incomplete")]
+)
+def test_malformed_response_envelope_is_safe_and_keeps_paid_usage(field, value):
+    _, _, payload = fixtures()
+    body = response(payload)
+    body[field] = value
+    with pytest.raises(EvaluationError) as err:
+        run_with_transport(lambda request: httpx.Response(200, json=body), retries=0)
+    assert err.value.code in {"AI_INVALID_RESPONSE", "AI_INCOMPLETE"}
+    assert err.value.provenance["usage"]["total_tokens"] == 120
+
+
+def test_provider_owned_client_is_closed_once_and_injected_client_is_not_closed():
+    class FakeClient:
+        closed = 0
+
+        async def close(self):
+            self.closed += 1
+
+    async def run():
+        client = FakeClient()
+        provider = OpenAIProvider(settings(), client=client)
+        await provider.aclose()
+        assert client.closed == 0
+        provider._owns_client = True
+        await provider.aclose()
+        await provider.aclose()
+        assert client.closed == 1
+
+    asyncio.run(run())
+
+
+def test_pipeline_requires_actual_attempt_and_sanitizes_invalid_provider_result():
+    class FakeProvider:
+        async def evaluate(self, transcript, checklist, prompt_version):
+            return self.result
+
+    async def run():
+        transcript, checklist, _ = fixtures()
+        provider = FakeProvider()
+        provider.result = json.loads((FIXTURES / "provider.response.json").read_text())
+        provider.result["usage"]["request_count"] = 0
+        with pytest.raises(EvaluationError) as err:
+            await EvaluationPipeline(settings(), provider).evaluate(
+                transcript=transcript, checklist=checklist
+            )
+        assert err.value.code == "AI_INVALID_RESPONSE"
+        provider.result = {"SYNTHETIC_PRIVATE_SENTINEL": "invalid structure"}
+        with pytest.raises(EvaluationError) as err:
+            await EvaluationPipeline(settings(), provider).evaluate(
+                transcript=transcript, checklist=checklist
+            )
+        assert err.value.code == "AI_INVALID_RESPONSE"
+        assert SECRET not in str(err.value)
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "language,text",
+    [
+        ("RU", "Здравствуйте! Как получить справку?"),
+        ("KZ", "Сәлеметсіз бе! Анықтаманы қайдан алуға болады?"),
+        ("EN", "Hello! Where can I download my statement?"),
+    ],
+)
+def test_multilingual_text_is_sent_without_translation_or_truncation(language, text):
+    transcript, _, payload = fixtures()
+    transcript["language"] = language
+    transcript["messages"][0]["text"] = text
+    captured = []
+
+    def handler(request):
+        captured.append(json.loads(request.content))
+        return httpx.Response(200, json=response(payload))
+
+    run_with_transport(handler, transcript=transcript)
+    actual = json.loads(captured[0]["input"][0]["content"])["untrusted_transcript_snapshot"]
+    assert actual["messages"][0]["text"] == text
+    assert actual["language"] == language

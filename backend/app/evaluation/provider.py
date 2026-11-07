@@ -34,7 +34,7 @@ def _counter(value):
 
 
 def _usage(response) -> dict:
-    usage = response.usage
+    usage = getattr(response, "usage", None)
     input_details = getattr(usage, "input_tokens_details", None)
     output_details = getattr(usage, "output_tokens_details", None)
     return {
@@ -129,18 +129,32 @@ class OpenAIProvider:
                         store=False,
                     )
                 counts = _usage(response)
-                if isinstance(response.model, str) and response.model.strip():
-                    model_reported = response.model
-                for item in response.output:
-                    if getattr(item, "type", None) == "message" and any(
-                        getattr(content, "type", None) == "refusal" for content in item.content
-                    ):
-                        raise EvaluationError("AI_REFUSED")
-                if response.status != "completed":
+                reported = getattr(response, "model", None)
+                if isinstance(reported, str) and reported.strip():
+                    model_reported = reported
+                output = getattr(response, "output", None)
+                if not isinstance(output, list):
+                    raise EvaluationError("AI_INVALID_RESPONSE", retryable=True)
+                text_parts = []
+                for item in output:
+                    if getattr(item, "type", None) != "message":
+                        continue
+                    content_items = getattr(item, "content", None)
+                    if not isinstance(content_items, list):
+                        raise EvaluationError("AI_INVALID_RESPONSE", retryable=True)
+                    for content in content_items:
+                        if getattr(content, "type", None) == "refusal":
+                            raise EvaluationError("AI_REFUSED")
+                        if getattr(content, "type", None) == "output_text":
+                            text = getattr(content, "text", None)
+                            if not isinstance(text, str):
+                                raise EvaluationError("AI_INVALID_RESPONSE", retryable=True)
+                            text_parts.append(text)
+                if getattr(response, "status", None) != "completed":
                     raise EvaluationError("AI_INCOMPLETE", retryable=True)
                 try:
-                    parsed = ModelResult.model_validate_json(response.output_text)
-                except (ValidationError, TypeError):
+                    parsed = ModelResult.model_validate_json("".join(text_parts))
+                except ValidationError:
                     raise EvaluationError("AI_INVALID_RESPONSE", retryable=True) from None
                 try:
                     validate_results(
