@@ -229,10 +229,16 @@ export function ConversationView({
       active = false;
     };
   }, [checklistId, reload]);
+  const ready =
+    !loading &&
+    !error &&
+    conversation?.id === id &&
+    loadedContext === requestContext;
   const polling =
     !!evaluation && ["running", "queued"].includes(evaluation.status);
   useEffect(() => {
     if (
+      !ready ||
       !evaluation ||
       !polling ||
       evaluation.conversation_id !== id ||
@@ -268,7 +274,7 @@ export function ConversationView({
       active = false;
       clearTimeout(timer);
     };
-  }, [id, evaluationId, evaluation?.id, polling, reload]);
+  }, [id, evaluationId, evaluation?.id, polling, reload, ready, requestContext]);
   const rememberReadingPosition = () => {
     const viewport = transcriptRoot.current?.querySelector<HTMLElement>(
       '[data-slot="scroll-area-viewport"]',
@@ -415,11 +421,6 @@ export function ConversationView({
       if (isCurrent()) setBusy(false);
     }
   };
-  const ready =
-    !loading &&
-    !error &&
-    conversation?.id === id &&
-    loadedContext === requestContext;
   const final = ready ? evaluation?.final : null;
   const original = ready ? evaluation?.original : null;
   const criterion =

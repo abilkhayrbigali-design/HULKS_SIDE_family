@@ -199,3 +199,81 @@ for (const sameConversation of [false, true]) {
     expect(queueRequests).toBe(initialRequests);
   });
 }
+
+test("latest alias waits for its history before polling and resumes the loaded run", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await mockAPI(page);
+  const old = fixture("evaluation.queued.json");
+  const conversation = fixture("conversation.response.json");
+  const latest = {
+    ...old,
+    id: "75000000-0000-4000-8000-000000000005",
+  };
+  const completed = { ...fixture("evaluation.completed.json"), id: latest.id };
+  const failedOld = {
+    ...old,
+    status: "failed",
+    completed_at: "2026-11-08T00:00:00Z",
+    error: {
+      code: "AI_TIMEOUT",
+      message: "PRIVATE_SERVER_MARKER",
+      details: [],
+    },
+  };
+  let switching = false;
+  let historyRequests = 0;
+  let oldRequests = 0;
+  let latestRequests = 0;
+  let queueRequests = 0;
+  let releaseLatest!: () => void;
+  const heldLatest = new Promise<void>((resolve) => {
+    releaseLatest = resolve;
+  });
+  await page.route("**/api/v1/conversations?*", (route) => {
+    queueRequests++;
+    return route.fulfill({ json: pageOf([conversation]) });
+  });
+  await page.route("**/api/v1/evaluations?*", async (route) => {
+    historyRequests++;
+    if (switching) await heldLatest;
+    return route.fulfill({ json: pageOf([latest, old]) });
+  });
+  await page.route(`**/api/v1/evaluations/${old.id}`, (route) => {
+    oldRequests++;
+    return route.fulfill({ json: switching ? failedOld : old });
+  });
+  await page.route(`**/api/v1/evaluations/${latest.id}`, (route) => {
+    latestRequests++;
+    return route.fulfill({ json: completed });
+  });
+  await page.goto(`/#/dialogues/${conversation.id}?evaluation=${old.id}`);
+  await expect(page.locator(".analysis-pending")).toBeVisible();
+  const initialOldRequests = oldRequests;
+  const initialHistoryRequests = historyRequests;
+  const initialQueueRequests = queueRequests;
+  switching = true;
+  await page.locator(`#queue-item-${conversation.id}`).click();
+  await expect
+    .poll(() => historyRequests)
+    .toBeGreaterThan(initialHistoryRequests);
+  await page.clock.runFor(4100);
+  // Let browser network events from the virtual timers reach the route handlers.
+  await page.waitForTimeout(100);
+  expect(oldRequests).toBe(initialOldRequests);
+  expect(latestRequests).toBe(0);
+  expect(queueRequests).toBe(initialQueueRequests);
+
+  releaseLatest();
+  await expect(page.locator(".analysis-pending")).toBeVisible();
+  await page.clock.runFor(2100);
+  await expect.poll(() => latestRequests).toBe(1);
+  await expect(page.locator(".score-main")).toContainText("70,00");
+  expect(oldRequests).toBe(initialOldRequests);
+  await expect.poll(() => queueRequests).toBe(initialQueueRequests + 1);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(await page.evaluate(() => location.hash)).toBe(
+    `#/dialogues/${conversation.id}`,
+  );
+});
