@@ -78,3 +78,17 @@ codex/chingiz-batch-export (backend), codex/nursultan-benchmark-intake (offline
 финальном base/head, затем повторно подтверждается при исправлениях. Main без
 отдельной команды пользователя не сливается. Новые вызовы AI/организаторов
 для приёмки не выполняются. Человеческую разметку завершает команда, не AI.
+
+A-19 приёмка: текущий код собран в общей ветке,315pytest/12Vitest/41Playwright,
+TypeScript/build/Ruff/exports и offline smoke прошли. Через настоящий HTTP,
+SQLite и worker с внедрённым SyntheticPipeline проверены создание двух оценок,
+один отказ AI_TIMEOUT, retry полного состава с переиспользованием успеха,
+скачивание двух JSON-строк после повтора и reload. В SQLite2batch,3evaluation,
+4membership: успешная исходная оценка не выполнялась повторно. Browser external,
+console и page errors0; server log не содержит текстов synthetic input/output.
+
+Три дополнительных read-only аналитика сравнили семь конкурентов и помогли авторам.
+Исправлены гонка checklist ошибок (независимый FAIL→PASS), unknown usage пропуска
+(две FAIL→PASS регрессии) и неполный export retry subset. Не переносились чужой код,
+автоматический AI после изменения checklist, in-memory jobs и raw exception logs.
+Финальный Q-01 и CI фиксируются в PR; человеческие labels ещё pending.
