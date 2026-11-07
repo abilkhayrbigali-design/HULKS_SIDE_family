@@ -21,7 +21,10 @@ await pipeline.aclose()  # shutdown: closes owned SDK client
 worker сохраняет исходный результат и `failed` самостоятельно. `EvaluationError` содержит
 `.code`, `.safe_message` (также `.message`), `.retryable`, `.provenance`. Полный exception/ответ
 модели не журналировать. Адаптер уже израсходовал свой предел повторов: worker не должен
-автоматически запускать новую цепочку поверх него.
+автоматически запускать новую цепочку поверх него. При graceful shutdown адаптер добавляет
+`.provenance` в `asyncio.CancelledError` и повторно выбрасывает отмену; worker сохраняет это
+поле для `INTERRUPTED`. Usage локален конкретному вызову, включая оплаченные ответы до
+backoff; если отменён уже следующий in-flight request, его токенные счётчики неизвестны.
 
 Для апелляции берутся исходные provider-поля текущих строк (criterion_id, applicability,
 answer, explanation, evidence, review_reasons), заменяется одна строка и вызывается:
@@ -56,7 +59,7 @@ MockTransport для тестов. Внедрённый клиент закры�
 ## Логи и воспроизведение ошибок
 
 Журнал `cqa.evaluation`: INFO `ai_request_started`, `ai_request_completed`; WARNING
-`ai_request_retry`, `ai_request_failed`, `evaluation_validation_failed`. Поля — фиксированный
+`ai_request_retry`, `ai_request_failed`, `ai_request_interrupted`, `evaluation_validation_failed`. Поля — фиксированный
 код, фактическая попытка, длительность. Worker пишет финальный ERROR и сохраняет ошибку;
 диагностика неожиданного сбоя остаётся на обрабатывающей границе, без дублирования traceback.
 

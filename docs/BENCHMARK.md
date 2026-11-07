@@ -79,7 +79,8 @@ review_reasons — из evaluation. Это можно сделать локал�
 Не использовать `final` после апелляций как предсказание исходной модели.
 
 Для неудачной оценки `result=null`, `error_code` — фиксированный код из
-`app.evaluation.errors.MESSAGES`; `failure_provenance` — сохранённый provenance либо null,
+`app.evaluation.errors.MESSAGES` либо worker-код `INTERRUPTED`/`EVALUATION_INTERNAL_ERROR`;
+`failure_provenance` — сохранённый provenance либо null,
 если вызов не состоялся/метаданные неизвестны. Сохранять paid invalid/incomplete попытки:
 неудача не означает нулевой расход. Отсутствующая prediction учитывается как missing,
 а не удаляется из знаменателя accuracy.

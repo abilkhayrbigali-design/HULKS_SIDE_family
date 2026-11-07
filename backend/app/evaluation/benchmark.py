@@ -70,7 +70,7 @@ class PredictionCase(EvaluationSchema):
         if self.result is not None:
             if self.error_code is not None or self.failure_provenance is not None:
                 raise ValueError("Successful prediction cannot contain a failure")
-        elif self.error_code not in MESSAGES:
+        elif self.error_code not in {*MESSAGES, "INTERRUPTED", "EVALUATION_INTERNAL_ERROR"}:
             raise ValueError("Failed prediction requires a safe evaluation error code")
         return self
 

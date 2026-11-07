@@ -189,3 +189,12 @@ def test_cli_produces_json_and_safe_failure_without_printing_private_input(
     assert captured.out == ""
     assert "SYNTHETIC_PRIVATE_SENTINEL" not in captured.err + caplog.text
     assert "BENCHMARK_INVALID_INPUT" in caplog.text
+
+
+@pytest.mark.parametrize("code", ["INTERRUPTED", "EVALUATION_INTERNAL_ERROR"])
+def test_worker_owned_safe_failure_codes_are_comparable(code):
+    labels, predictions = documents()
+    predictions["cases"][0].update(result=None, error_code=code)
+    report = compare_predictions(labels, predictions, split="tune")
+    assert report["overall"]["failed"] == 1
+    assert report["overall"]["criterion_exact_accuracy"] == 0
