@@ -1,5 +1,6 @@
 """Server-only configuration. Relative storage paths resolve from the repository root."""
 
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 from urllib.parse import SplitResult, urlsplit
@@ -52,6 +53,17 @@ class Settings(BaseSettings):
     default_group_id: str = Field(default="DEV", alias="CQA_DEFAULT_GROUP_ID", min_length=1)
     openai_api_key: SecretStr = Field(default=SecretStr(""), alias="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-6-luna", alias="OPENAI_MODEL", min_length=1)
+    ai_budget_usd: Decimal = Field(
+        default=Decimal("0"),
+        alias="CQA_AI_BUDGET_USD",
+        ge=0,
+        le=Decimal("9223372036854.775807"),
+        decimal_places=6,
+        allow_inf_nan=False,
+    )
+    llm_service_tier: Literal["default"] = Field(default="default", alias="CQA_LLM_SERVICE_TIER")
+    # Keep unknown versions readable; the provider policy fails closed before spending.
+    llm_price_version: str = Field(default="", alias="CQA_LLM_PRICE_VERSION")
     llm_timeout_seconds: float = Field(default=90, alias="CQA_LLM_TIMEOUT_SECONDS", gt=0, le=600)
     llm_max_retries: int = Field(default=2, alias="CQA_LLM_MAX_RETRIES", ge=0, le=5)
     llm_max_output_tokens: int = Field(
