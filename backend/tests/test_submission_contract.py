@@ -45,3 +45,43 @@ def test_batch_request_rejects_duplicate_conversations():
     request = fixture("batches/batch.create.json")
     request["conversation_ids"].append(request["conversation_ids"][0])
     assert not validator("EvaluationBatchCreate").is_valid(request)
+
+
+def test_export_rejects_legacy_request_without_an_independent_reference():
+    request = fixture("batches/submission.request.json")
+    del request["expected_conversation_ids"]
+    del request["expected_total_records"]
+    assert not validator("SubmissionExportRequest").is_valid(request)
+
+
+@pytest.mark.parametrize("schema", ["SubmissionExportRequest", "SubmissionPreflightRequest"])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"expected_conversation_ids": []},
+        {"expected_conversation_ids": ["same-id", "same-id"]},
+        {"expected_conversation_ids": [" "]},
+        {"expected_conversation_ids": [1]},
+        {"expected_total_records": 0},
+        {"expected_total_records": 1001},
+        {"expected_total_records": True},
+        {"expected_total_records": "2"},
+    ],
+)
+def test_submission_reference_rejects_invalid_ids_and_totals(schema, changes):
+    filename = (
+        "submission.request.json"
+        if schema == "SubmissionExportRequest"
+        else "preflight.request.json"
+    )
+    request = fixture(f"batches/{filename}")
+    request.update(changes)
+    assert not validator(schema).is_valid(request)
+
+
+def test_preflight_reports_wrong_sets_even_when_counts_are_equal():
+    result = fixture("batches/preflight.mismatched.json")
+    validator("SubmissionPreflightResponse").validate(result)
+    assert result["expected_count"] == result["batch_count"] == 2
+    assert result["missing_count"] == result["extra_count"] == 1
+    assert result["matches"] is False

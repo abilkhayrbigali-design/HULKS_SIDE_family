@@ -1,0 +1,16 @@
+{
+  "currency": "USD",
+  "limit_usd": "0.000000",
+  "committed_upper_usd": "0.000000",
+  "reserved_usd": "0.000000",
+  "available_usd": "0.000000",
+  "next_request_upper_usd": null,
+  "active_reservations": 0,
+  "unknown_reservations": 0,
+  "model": "gpt-6-luna",
+  "service_tier": "default",
+  "pricing_version": null,
+  "accounting_started_at": "2026-11-08T00:00:00Z",
+  "enabled": false,
+  "blocked_reason": "AI_BUDGET_DISABLED"
+}

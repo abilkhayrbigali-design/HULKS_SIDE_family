@@ -41,6 +41,17 @@ LANGUAGE = {"enum": ["RU", "KZ", "EN"]}
 CHANNEL = {"enum": ["agent chat", "voice call"]}
 SPEAKER = {"enum": ["client", "operator", "bot", "system"]}
 MESSAGE_ID = {"type": "string", "pattern": r"^m[0-9]{4,}$"}
+USD_AMOUNT = {"type": "string", "pattern": r"^(0|[1-9][0-9]{0,12})\.[0-9]{6}$"}
+BUDGET_CODES = {
+    "enum": [
+        "AI_BUDGET_DISABLED",
+        "AI_BUDGET_EXCEEDED",
+        "AI_BUDGET_POLICY_UNSUPPORTED",
+        "AI_BUDGET_UNAVAILABLE",
+        "AI_BUDGET_RESERVATION_CONFLICT",
+        "AI_BUDGET_WAITING",
+    ]
+}
 
 SCHEMAS = {
     "Health": obj({"status": {"const": "ok"}}),
@@ -441,7 +452,54 @@ SCHEMAS["EvaluationBatch"] = obj(
     }
 )
 TEAM_NAME = {**STRING, "maxLength": 200}
-SCHEMAS["SubmissionExportRequest"] = obj({"batch_id": UUID, "team_name": TEAM_NAME})
+SUBMISSION_REFERENCE = {
+    "batch_id": UUID,
+    "expected_conversation_ids": array(
+        STRING, minItems=1, maxItems=1000, uniqueItems=True
+    ),
+    "expected_total_records": {"type": "integer", "minimum": 1, "maximum": 1000},
+}
+SCHEMAS["SubmissionPreflightRequest"] = obj(SUBMISSION_REFERENCE)
+SCHEMAS["SubmissionPreflightResponse"] = obj(
+    {
+        **{
+            name: INTEGER
+            for name in (
+                "expected_count",
+                "batch_count",
+                "missing_count",
+                "extra_count",
+            )
+        },
+        "matches": BOOL,
+    }
+)
+SCHEMAS["SubmissionExportRequest"] = obj(
+    {**SUBMISSION_REFERENCE, "team_name": TEAM_NAME}
+)
+SCHEMAS["AIBudget"] = obj(
+    {
+        "currency": {"const": "USD"},
+        **{
+            name: USD_AMOUNT
+            for name in (
+                "limit_usd",
+                "committed_upper_usd",
+                "reserved_usd",
+                "available_usd",
+            )
+        },
+        "next_request_upper_usd": nullable(USD_AMOUNT),
+        "active_reservations": INTEGER,
+        "unknown_reservations": INTEGER,
+        "model": STRING,
+        "service_tier": {"const": "default"},
+        "pricing_version": nullable(STRING),
+        "accounting_started_at": TIME,
+        "enabled": BOOL,
+        "blocked_reason": nullable(BUDGET_CODES),
+    }
+)
 SUBMISSION_VALUES = {
     "contact": BOOL,
     "discovery": nullable(BOOL),
@@ -688,6 +746,15 @@ PATHS = {
             errors=(404, 409, 422),
         )
     },
+    "/api/v1/submission-preflights": {
+        "post": operation(
+            "preflightSubmission",
+            "SubmissionPreflightResponse",
+            body="SubmissionPreflightRequest",
+            errors=(404, 422),
+        )
+    },
+    "/api/v1/ai-budget": {"get": operation("getAIBudget", "AIBudget", errors=(503,))},
     "/api/v1/evaluations/{id}/appeals": {
         "post": operation(
             "createAppeal", "Appeal", 201, "AppealCreate", ID, errors=(404, 409, 422)
