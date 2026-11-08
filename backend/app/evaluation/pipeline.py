@@ -11,7 +11,7 @@ from app.evaluation.errors import EvaluationError
 from app.evaluation.schemas import ChecklistSnapshot, ProviderResult, TranscriptSnapshot
 from app.evaluation.scoring import calculate_assessment
 
-PROMPT_VERSION = "cqa-2026-11-07-v1"
+PROMPT_VERSION = "cqa-2026-11-08-v2"
 logger = logging.getLogger("cqa.evaluation")
 
 
