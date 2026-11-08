@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -14,6 +15,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app.config import Settings
+
+# app.main creates its module-level ASGI app during import. Isolate this standalone
+# test process BEFORE that import, including the otherwise implicit Settings().
+for field in Settings.model_fields.values():
+    if field.alias:
+        os.environ.pop(field.alias, None)
+Settings.model_config["env_file"] = None
+
 from app.evaluation.pipeline import EvaluationPipeline
 from app.evaluation.prompts import INSTRUCTIONS
 from app.evaluation.provider import OpenAIProvider

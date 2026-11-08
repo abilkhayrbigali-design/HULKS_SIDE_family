@@ -21,7 +21,7 @@ Node 22 из README проверяется CI; локальные результ
 | Команда | Результат и граница |
 | --- | --- |
 | `cp .env.example .env`, `make setup UV=/tmp/dataton-bootstrap/bin/uv` | Установка в новой рабочей копии по двум lock-файлам; Python venv создан заново, npm ci без найденных уязвимостей. Локальные секреты не копировались. |
-| `make check UV=/tmp/dataton-bootstrap/bin/uv` | Ruff, форматирование, экспорты контрактов, 243 pytest (238 исходных + 5 аудита), 7 Vitest, TypeScript и Vite build — PASS. |
+| `make check UV=/tmp/dataton-bootstrap/bin/uv` | Ruff, форматирование, экспорты контрактов, 244 pytest (238 исходных + 5 аудита + 1 изоляции harness), 7 Vitest, TypeScript и Vite build — PASS. |
 | `npm --prefix frontend run test:e2e` | 32 Playwright — PASS; синтетические браузерные API-ответы. Это отдельная проверка интерфейса. |
 | `npm --prefix frontend run test:e2e:backend` | 1 комплексный Playwright — PASS; настоящий HTTP/backend/миграции/seed/SQLite/worker/EvaluationPipeline/OpenAIProvider/SDK, только HTTP-транспорт SDK синтетический. Четыре искусственных SDK-ответа, внешних браузерных запросов 0, pageerrors 0. |
 | `make smoke UV=/tmp/dataton-bootstrap/bin/uv` | PASS; собранный UI и настоящий сервер с новой БД; импорт/чтение и отказ без ключа; `upstream_requests=0`. |
@@ -69,6 +69,11 @@ Benchmark реализован и проверен синтетическими 
 ## Изменения и диагностика
 
 Подтверждённых новых ошибок production-кода на текущем main не обнаружено.
+Q-01 выявил P2 в добавленном тестовом сервере: module-level app при импорте
+успевал читать `.env` до явных изолированных настроек. Перед импортом app.main
+теперь отключается env_file и удаляются алиасы настроек только в отдельном
+процессе harness. Subprocess-регрессия с запрещённым dotenv-reader и невалидными
+настройками воспроизвела отказ до исправления и проходит после него.
 Закрыт пробел проверки: редактирование критериев и апелляции теперь проходят
 одним тестом через настоящий backend, а не только через mock API.
 Проверка включена в CI full-application. README дополнен фактическим запуском;
@@ -80,7 +85,7 @@ Benchmark реализован и проверен синтетическими 
 Новых production-событий нет: используются `cqa.import/dataset_import_completed`,
 `cqa.evaluation/ai_request_started|ai_request_completed|appeal_created`,
 `cqa.worker/evaluation_started|evaluation_completed`,
-`cqa.appeals/appeal_decision_saved` и HTTP-сводки `cqa.requests`.
+`cqa.evaluation/appeal_decision_saved` и HTTP-сводки `cqa.requests`.
 Новый аудит пишет `cqa.public_readiness/public_readiness_started|completed|failed`.
 Его синтетическая регрессия удаляет подписанный URL из HEAD, но сохраняет его
 в истории: ожидается WARNING/REVIEW_REQUIRED без вывода значения в report/caplog.
@@ -103,7 +108,8 @@ uv run --project backend --locked python tools/check_public_readiness.py \
 1 — требуется разбор, 2 — аудит не выполнен. Untracked-файлы и недостижимые
 объекты не сканируются; бинарные/большие объекты явно отмечаются. Перед
 публикацией надо обновить предназначенные к публикации remote refs и повторить
-аудит; нынешний fetch обновил origin/main, не все удалённые ветки.
+аудит; в этой сессии после fetch origin/main выполнен и git fetch origin для доступных
+remote refs. Удалённые GitHub artifacts/PR и недостижимые объекты не охвачены.
 
 Предварительный аудит до коммита охватил 163 коммита/609 уникальных blobs,
 приватных путей и ключеподобных литералов не выявил; 5/5 gitignore probes PASS.
