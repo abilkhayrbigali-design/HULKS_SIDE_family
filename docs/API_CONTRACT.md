@@ -236,3 +236,26 @@ ProviderResult: `{ criterion_results, provider, model_requested, model_reported,
 - Абулхаир фиксирует синтетические контрактные примеры в A-02 и проверяет сквозную совместимость.
 - Новое поле по возможности добавляется совместимо. Переименование/удаление поля требует общей правки документов, клиента, сервера и проверок в согласованном порядке.
 - Декларативный контракт не является готовым сервером. Согласованные маршруты должны быть подтверждены первым работающим сквозным сценарием A-03.
+
+## 6. Файл сдачи организаторам (D-024)
+
+Это отдельный формат Appendix Results 1.0, **не ответ HTTP API**. Offline-команда
+`tools/export_submission.py` собирает/проверяет `results/dev/results.json` (65)
+и, после выдачи контроля, `results/prod/results.json` (10). Схема реализована в
+`backend/app/schemas/submissions.py`; команды — в README. Маршруты API и
+отложенный UI-экспорт AUD-02/X-01 этой задачей не изменяются.
+
+Верхний объект: `schema_version="1.0"`, непустой `team_name`, `model` с
+фактически использованными именами и mode, массив `results` с каждым исходным
+conversation_id ровно один раз. Успех: status=ok, восемь критериев с
+criterion_id/value/rationale/evidence_turns, score.final_score и critical_flag.
+Ошибка: status=error, criteria=[], score=null, безопасная причина в error.
+
+Соответствие кодов: contact→contact, needs→discovery,
+identification→identification, consultation→consultation, empathy→empathy,
+management→dialogue, closing→closure, gross_errors→critical. Ответы/шкалы/N/A
+и веса соответствуют исходному SCORING; critical передаётся отдельно.
+evidence_turns — номера с 1 по всему исходному массиву без фильтрации ролей;
+диапазоны разворачиваются включительно. JSON не содержит снимки диалога,
+аудиоссылки, usage и человеческие эталоны. Версии/исходные данные проверяются
+локально и не изменяются экспортом.
