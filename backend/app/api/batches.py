@@ -10,7 +10,12 @@ from app.models.batches import EvaluationBatch
 from app.schemas.batches import BatchCreate
 from app.schemas.batches import EvaluationBatch as BatchResponse
 from app.schemas.responses import Page
-from app.schemas.submissions import SubmissionDocument, SubmissionExportRequest
+from app.schemas.submissions import (
+    SubmissionDocument,
+    SubmissionExportRequest,
+    SubmissionPreflightRequest,
+    SubmissionPreflightResponse,
+)
 from app.services import batches, submissions
 from app.services.errors import ServiceError
 
@@ -58,3 +63,8 @@ def retry_batch(id: UUID, request: Request, db: DB):
 def export_submission(payload: SubmissionExportRequest, response: Response, db: DB):
     response.headers["Content-Disposition"] = 'attachment; filename="results.json"'
     return submissions.create(db, payload)
+
+
+@router.post("/submission-preflights", response_model=SubmissionPreflightResponse)
+def preflight_submission(payload: SubmissionPreflightRequest, db: DB):
+    return submissions.preflight(db, payload)

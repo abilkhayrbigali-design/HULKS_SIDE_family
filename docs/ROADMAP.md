@@ -57,7 +57,7 @@
 | --- | --- | --- | --- | --- | --- |
 | A-20 | P0 | Абулхаир | Settings/default0/pricing version и canonical API/fixtures/export с boundary tests | IN_PROGRESS | Wire согласован D-027; реализация проверяется отдельно |
 | A-21 | P0 | Root | Интеграция полноты/бюджета, HTTP/SQLite/worker QA, check/build/smoke/Playwright и Q-01 finalSHA | IN_PROGRESS | PR №6 сохранён; отдельная чистая ветка от fdf07bc |
-| C-13 | P0 | Чингиз | Независимый expected-ID reference, preflight и exact-set gate официального export | IN_PROGRESS | Пока код gap подтверждён; нужны регрессии и интеграция |
+| C-13 | P0 | Чингиз | Независимый expected-ID reference, preflight и exact-set gate официального export | IN_PROGRESS | Backend реализован: normalized external-ID set, strict total, side-effect-free counts/preflight и повторный gate export; 26 offline submission tests PASS. UI/combined Q-01 ещё впереди |
 | C-14 | P0 | Чингиз | Persistent global ledger, атомарные reserve/settle/unknown/restart и read-only status | IN_PROGRESS | Контракт D-027, без реальных расходов |
 | N-09 | P0 | Нурсултан | SQL-free policy/guard, per-attempt provider accounting и fail-closed/no replay | IN_PROGRESS | D-027: pure full-context quote/settlement, revalidation, ContextVar и microUSD helpers готовы;37 synthetic tests PASS. Provider integration продолжается |
 | N-10 | P0 | Нурсултан | Bounded offline rubric audit без подгонки holdout и фиктивной accuracy | DONE | Static-only audit45tune/887messages/4roles: rubric/scales/N/A/snapshots передаются полностью;9instruction checks PASS, доказуемых gaps0, prompt без изменений. Human labels0/holdout analysis0; model accuracy неизвестна |

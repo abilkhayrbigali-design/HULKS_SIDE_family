@@ -93,16 +93,8 @@ def _success(session, evaluation, external_id, checklist):
     )
 
 
-def create(session, payload):
-    batch = require(session.get(EvaluationBatch, str(payload.batch_id)))
-    checklist = require(session.get(ChecklistVersion, batch.checklist_version_id))
-    if _semantic(checklist.criteria) != _semantic(initial_checklist().model_dump()["criteria"]):
-        logger.warning("event=submission_export_rejected error=SUBMISSION_CHECKLIST_INCOMPATIBLE")
-        raise ServiceError(
-            409,
-            "SUBMISSION_CHECKLIST_INCOMPATIBLE",
-            "Для сдачи требуется исходный чек-лист организаторов",
-        )
+def _inputs(session, batch_id):
+    batch = require(session.get(EvaluationBatch, str(batch_id)))
     evaluations = batches.members(session, batch.id)
     external_ids = dict(
         session.execute(
@@ -111,6 +103,28 @@ def create(session, payload):
             )
         ).all()
     )
+    return batch, evaluations, external_ids
+
+
+def _coverage(payload, evaluations, external_ids):
+    expected = set(payload.expected_conversation_ids)
+    actual = set(external_ids.values())
+    return {
+        "expected_count": len(expected),
+        "batch_count": len(evaluations),
+        "missing_count": len(expected - actual),
+        "extra_count": len(actual - expected),
+        "matches": expected == actual and len(actual) == len(evaluations),
+    }
+
+
+def preflight(session, payload):
+    _, evaluations, external_ids = _inputs(session, payload.batch_id)
+    return _coverage(payload, evaluations, external_ids)
+
+
+def create(session, payload):
+    batch, evaluations, external_ids = _inputs(session, payload.batch_id)
     if len(set(external_ids.values())) != len(evaluations):
         logger.warning(
             "event=submission_export_rejected error=SUBMISSION_DUPLICATE_CONVERSATION_ID"
@@ -119,6 +133,29 @@ def create(session, payload):
             409,
             "SUBMISSION_DUPLICATE_CONVERSATION_ID",
             "Пакет содержит повторяющиеся исходные ID из разных наборов",
+        )
+    coverage = _coverage(payload, evaluations, external_ids)
+    if not coverage["matches"]:
+        logger.warning(
+            "event=submission_export_rejected error=SUBMISSION_SCOPE_MISMATCH "
+            "records=%d missing=%d extra=%d",
+            coverage["batch_count"],
+            coverage["missing_count"],
+            coverage["extra_count"],
+        )
+        raise ServiceError(
+            409,
+            "SUBMISSION_SCOPE_MISMATCH",
+            f"Состав не совпадает: отсутствует {coverage['missing_count']}, "
+            f"лишних {coverage['extra_count']}",
+        )
+    checklist = require(session.get(ChecklistVersion, batch.checklist_version_id))
+    if _semantic(checklist.criteria) != _semantic(initial_checklist().model_dump()["criteria"]):
+        logger.warning("event=submission_export_rejected error=SUBMISSION_CHECKLIST_INCOMPATIBLE")
+        raise ServiceError(
+            409,
+            "SUBMISSION_CHECKLIST_INCOMPATIBLE",
+            "Для сдачи требуется исходный чек-лист организаторов",
         )
     results, models = [], set()
     invalid = 0

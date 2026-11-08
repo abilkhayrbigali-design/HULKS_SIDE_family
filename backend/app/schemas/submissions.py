@@ -20,8 +20,28 @@ CriterionID = Literal[
 CRITERION_IDS = set(get_args(CriterionID))
 
 
-class SubmissionExportRequest(Schema):
+class SubmissionPreflightRequest(Schema):
     batch_id: UUID
+    expected_conversation_ids: Annotated[list[Text], Field(min_length=1, max_length=1000)]
+    expected_total_records: Annotated[StrictInt, Field(ge=1, le=1000)]
+
+    @model_validator(mode="after")
+    def valid_reference(self):
+        ids = self.expected_conversation_ids
+        if len(ids) != len(set(ids)) or len(ids) != self.expected_total_records:
+            raise ValueError("Invalid independent submission reference")
+        return self
+
+
+class SubmissionPreflightResponse(Schema):
+    expected_count: Annotated[StrictInt, Field(ge=0)]
+    batch_count: Annotated[StrictInt, Field(ge=0)]
+    missing_count: Annotated[StrictInt, Field(ge=0)]
+    extra_count: Annotated[StrictInt, Field(ge=0)]
+    matches: StrictBool
+
+
+class SubmissionExportRequest(SubmissionPreflightRequest):
     team_name: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
     ]
