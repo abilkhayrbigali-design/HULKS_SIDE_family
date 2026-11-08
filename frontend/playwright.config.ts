@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 import { existsSync } from "node:fs";
 export default defineConfig({
   testDir: "./tests",
+  testIgnore: "**/*.backend.spec.ts",
   timeout: 30000,
   expect: { timeout: 7000 },
   fullyParallel: false,

@@ -55,6 +55,12 @@ jobs:
           node-version: "22"
       - run: make setup
       - run: make build smoke
+      - name: Install Chromium for real backend acceptance
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Exercise real backend with synthetic SDK transport
+        working-directory: frontend
+        run: npm run test:e2e:backend
   backend-container:
     runs-on: ubuntu-latest
     steps:
