@@ -122,7 +122,7 @@ remote refs. Удалённые GitHub artifacts/PR и недостижимые 
 приватных путей и ключеподобных литералов не выявил; 5/5 gitignore probes PASS.
 Три группы content findings разобраны: синтетическая подпись loopback IPv6
 в `test_valid_http_settings_preserve_signed_url_and_support_ipv6`, и два
-URL_PARSE_REVIEW в тестах загрузки .env/невалидных audio URL. Это тестовые
+URL_PARSE_REVIEW в тестах отклонения невалидной конфигурации URL. Это тестовые
 литералы/преднамеренно повреждённые URL, не найденные рабочие секреты.
 Эвристика сохраняет REVIEW_REQUIRED; исключения, скрывающие такие проверки,
 не добавлялись. Незакоммиченные tracked-изменения также давали ожидаемые
