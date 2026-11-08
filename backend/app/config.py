@@ -82,6 +82,14 @@ class Settings(BaseSettings):
         default="INFO", alias="CQA_LOG_LEVEL"
     )
 
+    @field_validator("openai_model")
+    @classmethod
+    def validate_model_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("OPENAI_MODEL must contain a nonblank model name")
+        # The provider policy checks exact names; do not normalize an unsupported one.
+        return value
+
     @field_validator("dataset_api_url")
     @classmethod
     def validate_dataset_url(cls, value: SecretStr) -> SecretStr:

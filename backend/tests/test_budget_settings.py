@@ -90,3 +90,21 @@ def test_invalid_budget_diagnostic_does_not_include_its_input():
     with pytest.raises(ValidationError) as caught:
         Settings(_env_file=None, CQA_AI_BUDGET_USD=marker)
     assert marker not in str(caught.value)
+
+
+@pytest.mark.parametrize("value", [" ", "\t", "\r\n", "\u00a0", "\u2003"])
+def test_blank_model_is_rejected_before_readonly_budget_serialization(value):
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, OPENAI_MODEL=value)
+
+
+@pytest.mark.parametrize("value", ["unknown-model", " gpt-6-luna "])
+def test_nonblank_model_is_preserved_for_exact_provider_policy_check(value):
+    assert Settings(_env_file=None, OPENAI_MODEL=value).openai_model == value
+
+
+def test_invalid_model_diagnostic_does_not_echo_configuration_input():
+    marker = "synthetic-private-model-setting-marker"
+    with pytest.raises(ValidationError) as caught:
+        Settings(_env_file=None, OPENAI_MODEL=[marker])
+    assert marker not in str(caught.value)
