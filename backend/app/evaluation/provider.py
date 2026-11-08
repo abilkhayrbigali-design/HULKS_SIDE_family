@@ -170,13 +170,14 @@ class OpenAIProvider:
         self._require_key()
         started = time.monotonic()
         attempts = []
+        model_requested = self.settings.openai_model
         model_reported = None
         reservation_id = None
 
         def provenance():
             return {
                 "provider": "openai",
-                "model_requested": self.settings.openai_model,
+                "model_requested": model_requested,
                 "model_reported": model_reported,
                 "prompt_version": prompt_version,
                 "duration_ms": int((time.monotonic() - started) * 1000),
@@ -190,11 +191,30 @@ class OpenAIProvider:
             if self._budget_guard is None or context is None:
                 raise EvaluationError("AI_BUDGET_DISABLED")
             quote = make_quote(
-                model=self.settings.openai_model,
+                model=model_requested,
                 price_version=getattr(self.settings, "llm_price_version", ""),
                 max_output_tokens=self.settings.llm_max_output_tokens,
                 service_tier=getattr(self.settings, "llm_service_tier", "default"),
             )
+            # Build local data before reserving or counting an SDK invocation.
+            # Bind monetary parameters to the frozen quote across guard waits.
+            payload = {
+                "model": quote.model,
+                "instructions": INSTRUCTIONS,
+                "input": [{"role": "user", "content": build_input(transcript, checklist)}],
+                "text": {
+                    "format": {
+                        "type": "json_schema",
+                        "name": "cqa_evaluation",
+                        "strict": True,
+                        "schema": response_schema(checklist),
+                    }
+                },
+                "reasoning": {"effort": self.settings.llm_reasoning_effort},
+                "max_output_tokens": quote.max_output_tokens,
+                "service_tier": "default",
+                "store": False,
+            }
             for attempt in range(1, self.settings.llm_max_retries + 2):
                 # Guard may await a transient active reservation. No transaction,
                 # SDK client, timeout/retry count or paid attempt exists yet.
@@ -202,34 +222,15 @@ class OpenAIProvider:
                 if not isinstance(reservation_id, str) or not reservation_id:
                     raise EvaluationError("AI_BUDGET_UNAVAILABLE")
                 client = await self._get_client()
-                logger.info("event=ai_request_started attempt=%d", attempt)
+                create = client.responses.create
                 counts = dict.fromkeys(TOKEN_FIELDS)
-                attempts.append(counts)
                 try:
                     # SDK retries are disabled; timeout applies to each actual request, including
                     # mocked/injected clients. No previous_response_id or response storage is used.
                     async with asyncio.timeout(self.settings.llm_timeout_seconds):
-                        response = await client.responses.create(
-                            model=self.settings.openai_model,
-                            instructions=INSTRUCTIONS,
-                            input=[{"role": "user", "content": build_input(transcript, checklist)}],
-                            text={
-                                "format": {
-                                    "type": "json_schema",
-                                    "name": "cqa_evaluation",
-                                    "strict": True,
-                                    "schema": response_schema(checklist),
-                                }
-                            },
-                            reasoning={
-                                "effort": getattr(self.settings, "llm_reasoning_effort", "medium")
-                            },
-                            max_output_tokens=getattr(
-                                self.settings, "llm_max_output_tokens", 12000
-                            ),
-                            service_tier="default",
-                            store=False,
-                        )
+                        logger.info("event=ai_request_started attempt=%d", attempt)
+                        attempts.append(counts)
+                        response = await create(**payload)
                     counts.update(_usage(response))
                     reported = getattr(response, "model", None)
                     if isinstance(reported, str) and reported.strip():
@@ -300,7 +301,7 @@ class OpenAIProvider:
                     return ProviderResult(
                         **parsed.model_dump(),
                         provider="openai",
-                        model_requested=self.settings.openai_model,
+                        model_requested=model_requested,
                         model_reported=model_reported,
                         usage=_merge_usage(attempts),
                         duration_ms=duration,

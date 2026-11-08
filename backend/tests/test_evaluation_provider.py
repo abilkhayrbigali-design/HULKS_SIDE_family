@@ -738,3 +738,44 @@ def test_sdk_constructor_failure_closes_client_retains_reserve_safely(monkeypatc
     with caplog.at_level(logging.INFO):
         asyncio.run(run())
     assert SECRET not in caplog.text
+
+
+@pytest.mark.parametrize("builder", ["build_input", "response_schema"])
+def test_payload_build_failure_is_not_an_sdk_attempt_or_reservation(builder, monkeypatch, caplog):
+    import app.evaluation.provider as module
+
+    def broken(*args):
+        raise ValueError(SECRET)
+
+    monkeypatch.setattr(module, builder, broken)
+    guard = RecordingGuard()
+    with caplog.at_level(logging.INFO), pytest.raises(EvaluationError) as err:
+        run_with_transport(lambda request: pytest.fail("No SDK request"), guard=guard)
+    assert err.value.code == "AI_UNAVAILABLE"
+    assert err.value.provenance["usage"]["request_count"] == 0
+    assert guard.reservations == guard.settlements == []
+    assert SECRET not in caplog.text + str(err.value)
+
+
+def test_request_and_provenance_remain_bound_to_quote_during_guard_wait():
+    _, _, payload = fixtures()
+    configured = settings()
+    captured = []
+
+    class MutatingGuard(RecordingGuard):
+        async def reserve(self, **kwargs):
+            # Simulates configuration changing while an async reservation waits.
+            configured.openai_model = "different-model"
+            configured.llm_max_output_tokens = 64000
+            configured.llm_reasoning_effort = "high"
+            return await super().reserve(**kwargs)
+
+    def handler(request):
+        captured.append(json.loads(request.content))
+        return httpx.Response(200, json=response(payload))
+
+    guard = MutatingGuard()
+    result = run_with_transport(handler, configured=configured, guard=guard)
+    assert captured[0]["model"] == result.provenance["model_requested"] == "gpt-6-luna"
+    assert captured[0]["max_output_tokens"] == guard.reservations[0][2].max_output_tokens == 12000
+    assert captured[0]["reasoning"] == {"effort": "medium"}
