@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, Layers, Play, RefreshCw } from "lucide-react";
 import { api, allPages, ApiError, logFailure, errorMessage } from "../api/client";
-import type { ChecklistDetail, ChecklistSummary, Conversation, EvaluationBatch } from "../api/types";
+import type { ChecklistDetail, ChecklistSummary, Conversation, EvaluationBatch, SubmissionReference, SubmissionPreflight } from "../api/types";
 import { Button } from "../components/ui/button";
 import { date, Empty, ErrorBox, Loading, StatusBadge } from "../ui";
 import { batchFinished, useBatches } from "../workspace/batches";
 import { BatchScopeError, batchScopeQuery, loadBatchScope } from "./batch-scope";
 import type { BatchFilters } from "./batch-scope";
+import { readSubmissionReference, validPreflight } from "./submission-reference";
+import { BudgetNotice, useBudget } from "../workspace/budget";
 
 export function Batches() {
   const state = useBatches();
+  const budget = useBudget();
   const [history, setHistory] = useState<EvaluationBatch[]>([]);
   const [historyError, setHistoryError] = useState<unknown>();
   const [reload, setReload] = useState(0);
@@ -49,7 +52,7 @@ export function Batches() {
         {state.attempt && <div className="batch-unconfirmed" role="status">
           <strong>Запуск не подтверждён</strong>
           <p>Сохранён запрос на {state.attempt.conversation_ids.length} диалогов. Повтор отправит тот же запрос и не создаст второй пакет.</p>
-          <Button size="sm" variant="outline" disabled={state.busy} onClick={() => void state.retryUnconfirmed()}>Повторить запрос запуска</Button>
+          <Button size="sm" variant="outline" disabled={state.busy || !budget.allowed} onClick={() => void state.retryUnconfirmed()}>Повторить запрос запуска</Button>
         </div>}
         {Boolean(state.error) && <ErrorBox error={state.error} onRetry={state.id ? state.refresh : undefined} />}
         {state.loading && !state.batch ? <Loading text="Загружаем сохранённый пакет…" /> : state.batch ?
@@ -62,6 +65,7 @@ export function Batches() {
 
 function BatchForm() {
   const state = useBatches();
+  const budget = useBudget();
   const [checklists, setChecklists] = useState<ChecklistSummary[]>([]);
   const [checklistId, setChecklistId] = useState("");
   const [detail, setDetail] = useState<ChecklistDetail | null>(null);
@@ -180,11 +184,12 @@ function BatchForm() {
             </div>
           </>}
           <p className="muted">При запуске сервер зафиксирует текущие транскрипты и выбранную версию правил. Оценка использует AI.</p>
-          <Button disabled={!version || !selected.size} onClick={() => void state.create(prepared.filter((c) => selected.has(c.id)).map((c) => c.id), version)}>
+          <Button disabled={!version || !selected.size || !budget.allowed} onClick={() => void state.create(prepared.filter((c) => selected.has(c.id)).map((c) => c.id), version)}>
             <Play size={15} />{state.busy ? "Создаём пакет…" : `Запустить пакет · ${selected.size}`}
           </Button>
         </div>}
       </fieldset>
+      <BudgetNotice />
     </>}
     {Boolean(listError) && <ErrorBox error={listError} onRetry={() => { invalidate(); setReload((v) => v + 1); }} />}
     {Boolean(detailError) && <ErrorBox error={detailError} onRetry={() => { invalidate(); setReload((v) => v + 1); }} />}
@@ -194,6 +199,7 @@ function BatchForm() {
 
 function BatchProgress({ batch }: { batch: EvaluationBatch }) {
   const state = useBatches();
+  const budget = useBudget();
   const finished = batchFinished(batch);
   return <div className="batch-progress">
     <div className="batch-progress-heading">
@@ -207,11 +213,12 @@ function BatchProgress({ batch }: { batch: EvaluationBatch }) {
       {[["Всего", batch.total], ["В очереди", batch.queued], ["В работе", batch.running], ["Готово", batch.completed], ["Ошибок", batch.failed]].map(([name, count]) => <div key={String(name)}><dt>{name}</dt><dd>{count}</dd></div>)}
     </dl>
     <div className="batch-actions">
-      <Button variant="outline" disabled={!finished || !batch.failed || state.busy} onClick={() => void state.retryFailed()}>
+      <Button variant="outline" disabled={!finished || !batch.failed || state.busy || !budget.allowed} onClick={() => void state.retryFailed()}>
         <RefreshCw size={15} />{state.busy ? "Создаём повтор…" : `Повторить ошибки · ${batch.failed}`}
       </Button>
       <p className="muted">Новый пакет сохранит успешные оценки и повторит только ошибки по исходным снимкам. Новые вызовы AI нужны только для ошибок; экспорт сохранит полный набор.</p>
     </div>
+    <BudgetNotice />
     <div className="batch-items" role="list" aria-label="Результаты пакета">
       {batch.items.map((item, i) => <div role="listitem" key={item.evaluation_id}>
         <a href={`#/dialogues/${encodeURIComponent(item.conversation_id)}?evaluation=${encodeURIComponent(item.evaluation_id)}`}>Диалог {i + 1} · {item.conversation_id.slice(0, 8)}</a>
@@ -228,15 +235,38 @@ function BatchExport({ batch }: { batch: EvaluationBatch }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const [downloaded, setDownloaded] = useState(false);
+  const [reference, setReference] = useState<SubmissionReference | null>(null);
+  const [coverage, setCoverage] = useState<SubmissionPreflight | null>(null);
+  const [reading, setReading] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const generation = useRef(0);
   const active = useRef(true);
   const pending = useRef(false);
-  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  useEffect(() => { active.current = true; return () => { active.current = false; ++generation.current; }; }, []);
+  const checkCoverage = async () => {
+    if (!reference || reading || checking || busy) return;
+    const token = ++generation.current;
+    setChecking(true); setCoverage(null); setError(undefined); setDownloaded(false);
+    try {
+      const result = await api.submissionPreflight(batch.id, reference);
+      if (!active.current || generation.current !== token) return;
+      if (!validPreflight(result, reference, batch.total)) {
+        logFailure(200, "INVALID_RESPONSE");
+        throw new ApiError(200, "INVALID_RESPONSE");
+      }
+      setCoverage(result);
+    } catch (e) {
+      if (active.current && generation.current === token) setError(e);
+    } finally {
+      if (active.current && generation.current === token) setChecking(false);
+    }
+  };
   const download = async () => {
-    if (pending.current) return;
+    if (pending.current || !reference || coverage?.matches !== true || reading || checking || !batchFinished(batch)) return;
     pending.current = true;
     setBusy(true); setError(undefined); setDownloaded(false);
     try {
-      const document = await api.submissionExport(batch.id, team.trim());
+      const document = await api.submissionExport(batch.id, team.trim(), reference);
       if (!active.current) return;
       const url = URL.createObjectURL(new Blob([JSON.stringify(document, null, 2)], { type: "application/json;charset=utf-8" }));
       const link = window.document.createElement("a");
@@ -246,7 +276,10 @@ function BatchExport({ batch }: { batch: EvaluationBatch }) {
       setDownloaded(true);
     } catch (e) {
       if (!active.current) return;
-      if (e instanceof ApiError) setError(e);
+      if (e instanceof ApiError) {
+        setError(e);
+        if (e.code === "SUBMISSION_SCOPE_MISMATCH") setCoverage(null);
+      }
       else { logFailure(0, "API_ERROR"); setError(new ApiError(0, "API_ERROR")); }
     } finally {
       pending.current = false;
@@ -256,8 +289,40 @@ function BatchExport({ batch }: { batch: EvaluationBatch }) {
   return <section className="batch-export" aria-label="Официальный экспорт">
     <h3>Официальный results.json</h3>
     <p className="muted">Экспорт использует сохранённые исходные оценки до апелляций. Новых вызовов AI нет. Незавершённые, ошибочные и требующие проверки оценки сохраняются строками error. Чек-лист должен быть совместим с официальным форматом.</p>
+    <div className="submission-reference">
+      <h4>Независимый эталон состава</h4>
+      <p className="muted">Загрузите исходный JSON выданного набора: organizer data.records с total_records или объект records. Он задаёт ожидаемые внешние ID независимо от выбранного пакета. До 16 МиБ и 1000 диалогов.</p>
+      <label className="field">Исходный JSON для сверки
+        <input aria-label="Исходный JSON для сверки" type="file" accept="application/json,.json" disabled={busy} onChange={async (event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (!file) return;
+          const token = ++generation.current;
+          setReading(true); setChecking(false); setReference(null); setCoverage(null); setError(undefined); setDownloaded(false);
+          try {
+            const parsed = await readSubmissionReference(file);
+            if (active.current && generation.current === token) setReference(parsed);
+          } catch (e) {
+            if (active.current && generation.current === token) {
+              logFailure(422, "VALIDATION_ERROR"); setError(e);
+            }
+          } finally {
+            if (active.current && generation.current === token) setReading(false);
+          }
+        }} />
+      </label>
+      {reading ? <p role="status">Читаем эталон…</p> : reference ? <p role="status">Эталон из файла: {reference.expected_total_records} диалогов · пакет: {batch.total}</p> : <p className="muted">Загрузите отдельный исходный файл. Без эталона экспорт недоступен.</p>}
+      <Button variant="outline" disabled={!reference || reading || checking || busy} onClick={() => void checkCoverage()}>{checking ? "Проверяем состав…" : "Проверить состав"}</Button>
+      {coverage && <div className={`submission-coverage ${coverage.matches ? "matches" : "mismatch"}`} role="status">
+        <strong>{coverage.matches ? "Состав совпадает" : "Состав не совпадает"}</strong>
+        <dl className="submission-counts">
+          {[["Ожидается", coverage.expected_count], ["В пакете", coverage.batch_count], ["Пропущено", coverage.missing_count], ["Лишних", coverage.extra_count]].map(([label, count]) => <div key={label}><dt>{label}</dt><dd>{count}</dd></div>)}
+        </dl>
+      </div>}
+      <p className="muted">Сверка не запускает AI. Сохраняются только ID в памяти этой страницы; после reload или выбора другого пакета загрузите эталон заново. Подлинность исходного файла проверяет команда.</p>
+    </div>
     <label className="field">Название команды<input aria-label="Название команды" value={team} maxLength={200} disabled={busy} onChange={(e) => { setTeam(e.target.value); setDownloaded(false); }} /></label>
-    <Button disabled={busy || !team.trim() || !batchFinished(batch)} onClick={() => void download()}><Download size={15} />{busy ? "Готовим файл…" : "Скачать results.json"}</Button>
+    <Button disabled={busy || reading || checking || !reference || coverage?.matches !== true || !team.trim() || !batchFinished(batch)} onClick={() => void download()}><Download size={15} />{busy ? "Готовим файл…" : "Скачать results.json"}</Button>
     {!batchFinished(batch) && <p className="muted">Скачивание доступно после завершения пакета.</p>}
     {downloaded && <p role="status">Файл results.json подготовлен к скачиванию.</p>}
     {Boolean(error) && <ErrorBox error={error} />}

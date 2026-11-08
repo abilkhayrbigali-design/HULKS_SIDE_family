@@ -1,4 +1,9 @@
 {
   "batch_id": "00000000-0000-4000-8000-000000000111",
-  "team_name": "Synthetic CQA team"
+  "team_name": "Synthetic CQA team",
+  "expected_conversation_ids": [
+    "synthetic-batch-001",
+    "synthetic-batch-002"
+  ],
+  "expected_total_records": 2
 }

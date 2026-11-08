@@ -423,8 +423,10 @@ def test_paid_failure_preserves_known_provenance(setup, caplog):
 
 
 def test_graceful_stop_preserves_paid_usage_during_provider_retry(setup):
+    from app.evaluation.budget import PRICE_VERSION
     from app.evaluation.pipeline import EvaluationPipeline
     from app.evaluation.provider import OpenAIProvider
+    from app.services.budget import SqlBudgetGuard
 
     client, _, app, _ = setup
     retry_reached = threading.Event()
@@ -469,13 +471,20 @@ def test_graceful_stop_preserves_paid_usage_during_provider_retry(setup):
         retry_reached.set()
         await asyncio.sleep(30)
 
-    settings = Settings(_env_file=None, OPENAI_API_KEY="synthetic-test-only")
+    settings = Settings(
+        _env_file=None,
+        OPENAI_API_KEY="synthetic-test-only",
+        CQA_AI_BUDGET_USD="1",
+        CQA_LLM_PRICE_VERSION=PRICE_VERSION,
+    )
+    guard = SqlBudgetGuard(app.state.session_factory.kw["bind"], settings)
+    guard.initialize()
     sdk = AsyncOpenAI(
         api_key="synthetic-test-only",
         max_retries=0,
         http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)),
     )
-    provider = OpenAIProvider(settings, client=sdk, sleep=pause_retry)
+    provider = OpenAIProvider(settings, client=sdk, sleep=pause_retry, budget_guard=guard)
     app.state.evaluation_worker.pipeline = EvaluationPipeline(settings, provider=provider)
     try:
         created = client.post("/api/v1/evaluations", json=inputs(client)).json()
@@ -488,6 +497,9 @@ def test_graceful_stop_preserves_paid_usage_during_provider_retry(setup):
         assert failed["provenance"]["usage"]["total_tokens"] == 120
         assert failed["original"] is None
         assert len(calls) == 1
+        status = guard.status()
+        assert status["committed_upper_usd"] == "0.000039"
+        assert status["reserved_usd"] == "0.000000"
     finally:
         client.portal.call(sdk.close)
 

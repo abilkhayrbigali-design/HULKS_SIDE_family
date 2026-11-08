@@ -66,6 +66,11 @@ def test_batch_worker_export_and_reload_match_canonical_contract(tmp_path):
     app = create_app(settings)
     app.state.evaluation_pipeline = SyntheticPipeline()
     with TestClient(app) as client:
+        budget = client.get("/api/v1/ai-budget")
+        assert budget.status_code == 200
+        validator("AIBudget").validate(budget.json())
+        assert budget.json()["enabled"] is False
+        assert budget.json()["limit_usd"] == "0.000000"
         response = client.post(
             "/api/v1/conversations/import",
             json={
@@ -107,7 +112,37 @@ def test_batch_worker_export_and_reload_match_canonical_contract(tmp_path):
             time.sleep(0.02)
         assert (batch["total"], batch["completed"], batch["failed"]) == (2, 1, 1)
         validator("EvaluationBatchPage").validate(client.get("/api/v1/evaluation-batches").json())
-        export_request = {"batch_id": batch_id, "team_name": "Synthetic CQA team"}
+        reference = {
+            "batch_id": batch_id,
+            "expected_conversation_ids": ["synthetic-contract-0", "synthetic-contract-1"],
+            "expected_total_records": 2,
+        }
+        preflight = client.post("/api/v1/submission-preflights", json=reference)
+        assert preflight.status_code == 200
+        validator("SubmissionPreflightResponse").validate(preflight.json())
+        assert preflight.json()["matches"] is True
+        export_request = {**reference, "team_name": "Synthetic CQA team"}
+        wrong_scope = {
+            **export_request,
+            "expected_conversation_ids": ["synthetic-contract-0", "synthetic-missing-reference"],
+        }
+        preflight = client.post(
+            "/api/v1/submission-preflights",
+            json={key: value for key, value in wrong_scope.items() if key != "team_name"},
+        )
+        assert preflight.status_code == 200
+        validator("SubmissionPreflightResponse").validate(preflight.json())
+        assert preflight.json() == {
+            "expected_count": 2,
+            "batch_count": 2,
+            "missing_count": 1,
+            "extra_count": 1,
+            "matches": False,
+        }
+        rejection = client.post("/api/v1/submission-exports", json=wrong_scope)
+        assert rejection.status_code == 409
+        validator("Error").validate(rejection.json())
+        assert rejection.json()["error"]["code"] == "SUBMISSION_SCOPE_MISMATCH"
         response = client.post("/api/v1/submission-exports", json=export_request)
         assert response.status_code == 200
         document = response.json()

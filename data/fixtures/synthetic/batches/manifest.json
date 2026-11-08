@@ -17,6 +17,18 @@
     {
       "file": "submission.response.json",
       "schema": "SubmissionDocument"
+    },
+    {
+      "file": "preflight.request.json",
+      "schema": "SubmissionPreflightRequest"
+    },
+    {
+      "file": "preflight.matched.json",
+      "schema": "SubmissionPreflightResponse"
+    },
+    {
+      "file": "preflight.mismatched.json",
+      "schema": "SubmissionPreflightResponse"
     }
   ]
 }

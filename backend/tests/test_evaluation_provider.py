@@ -4,6 +4,7 @@ import asyncio
 import copy
 import json
 import logging
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,6 +14,7 @@ from jsonschema import Draft202012Validator
 from openai import AsyncOpenAI
 
 from app.config import Settings
+from app.evaluation.budget import PRICE_VERSION, evaluation_scope, validate_quote
 from app.evaluation.errors import EvaluationError
 from app.evaluation.pipeline import PROMPT_VERSION, EvaluationPipeline
 from app.evaluation.provider import OpenAIProvider
@@ -35,7 +37,28 @@ def fixtures():
 
 
 def settings(retries=2):
-    return Settings(_env_file=None, OPENAI_API_KEY=SECRET, CQA_LLM_MAX_RETRIES=retries)
+    return Settings(
+        _env_file=None,
+        OPENAI_API_KEY=SECRET,
+        CQA_LLM_MAX_RETRIES=retries,
+        CQA_LLM_PRICE_VERSION=PRICE_VERSION,
+    )
+
+
+class RecordingGuard:
+    """Synthetic protocol peer; real persisted accounting is tested by backend owner C."""
+
+    def __init__(self):
+        self.reservations = []
+        self.settlements = []
+
+    async def reserve(self, *, context, attempt, quote):
+        validate_quote(quote)
+        self.reservations.append((context, attempt, quote))
+        return f"synthetic-{len(self.reservations)}"
+
+    async def settle(self, *, reservation_id, usage):
+        self.settlements.append((reservation_id, usage))
 
 
 def response(payload, *, status="completed", usage=True):
@@ -72,7 +95,16 @@ def response(payload, *, status="completed", usage=True):
     }
 
 
-def run_with_transport(handler, *, retries=2, transcript=None, checklist=None):
+def run_with_transport(
+    handler,
+    *,
+    retries=2,
+    transcript=None,
+    checklist=None,
+    guard=...,
+    scoped=True,
+    configured=None,
+):
     async def run():
         source, rubric, _ = fixtures()
         async with AsyncOpenAI(
@@ -84,11 +116,18 @@ def run_with_transport(handler, *, retries=2, transcript=None, checklist=None):
             async def no_sleep(_):
                 return None
 
-            provider = OpenAIProvider(settings(retries), client=client, sleep=no_sleep)
-            return await EvaluationPipeline(settings(retries), provider=provider).evaluate(
-                transcript=transcript or source,
-                checklist=checklist or rubric,
+            config = configured or settings(retries)
+            provider = OpenAIProvider(
+                config,
+                client=client,
+                sleep=no_sleep,
+                budget_guard=RecordingGuard() if guard is ... else guard,
             )
+            with evaluation_scope("synthetic-evaluation") if scoped else nullcontext():
+                return await EvaluationPipeline(config, provider=provider).evaluate(
+                    transcript=transcript or source,
+                    checklist=checklist or rubric,
+                )
 
     return asyncio.run(run())
 
@@ -109,6 +148,8 @@ def test_sdk_sends_complete_current_snapshots_strict_schema_and_no_storage(caplo
     body = captured[0]
     assert body["model"] == "gpt-6-luna"
     assert body["store"] is False
+    assert body["service_tier"] == "default"
+    assert "tools" not in body
     assert body["reasoning"] == {"effort": "medium"}
     assert body["text"]["format"]["strict"] is True
     Draft202012Validator(body["text"]["format"]["schema"]).validate(payload)
@@ -281,9 +322,14 @@ def test_outer_async_timeout_also_bounds_injected_clients():
             OPENAI_API_KEY=SECRET,
             CQA_LLM_MAX_RETRIES=0,
             CQA_LLM_TIMEOUT_SECONDS=0.01,
+            CQA_LLM_PRICE_VERSION=PRICE_VERSION,
         )
-        provider = OpenAIProvider(configured, client=SimpleNamespace(responses=SlowClient()))
-        with pytest.raises(EvaluationError) as err:
+        provider = OpenAIProvider(
+            configured,
+            client=SimpleNamespace(responses=SlowClient()),
+            budget_guard=RecordingGuard(),
+        )
+        with pytest.raises(EvaluationError) as err, evaluation_scope("synthetic-evaluation"):
             await provider.evaluate(
                 TranscriptSnapshot.model_validate(transcript),
                 ChecklistSnapshot.model_validate(checklist),
@@ -405,14 +451,17 @@ def test_cancellation_preserves_paid_attempts_and_counts_unknown_inflight(during
             max_retries=0,
             http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
         ) as client:
-            provider = OpenAIProvider(settings(), client=client, sleep=sleep)
-            task = asyncio.create_task(
-                provider.evaluate(
-                    TranscriptSnapshot.model_validate(transcript),
-                    ChecklistSnapshot.model_validate(checklist),
-                    PROMPT_VERSION,
-                )
+            provider = OpenAIProvider(
+                settings(), client=client, sleep=sleep, budget_guard=RecordingGuard()
             )
+            with evaluation_scope("synthetic-evaluation"):
+                task = asyncio.create_task(
+                    provider.evaluate(
+                        TranscriptSnapshot.model_validate(transcript),
+                        ChecklistSnapshot.model_validate(checklist),
+                        PROMPT_VERSION,
+                    )
+                )
             await asyncio.wait_for(cancellation_point.wait(), timeout=1)
             task.cancel()
             with pytest.raises(asyncio.CancelledError) as err:
@@ -456,3 +505,277 @@ def test_invalid_http_json_uses_retry_budget_and_preserves_accounting(paid_first
     assert SECRET not in caplog.text + str(err.value)
     if paid_first:
         assert err.value.provenance["model_reported"] == "gpt-6-luna"
+
+
+@pytest.mark.parametrize("missing", ["guard", "context"])
+def test_missing_guard_or_context_never_calls_sdk(missing, caplog):
+    guard = None if missing == "guard" else RecordingGuard()
+    with (
+        caplog.at_level(logging.INFO, logger="cqa.evaluation"),
+        pytest.raises(EvaluationError) as err,
+    ):
+        run_with_transport(
+            lambda request: pytest.fail("SDK must not be called"),
+            guard=guard,
+            scoped=missing != "context",
+        )
+    assert err.value.code == "AI_BUDGET_DISABLED"
+    assert err.value.provenance["usage"]["request_count"] == 0
+    assert "event=ai_request_started" not in caplog.text
+
+
+@pytest.mark.parametrize("change", [{"OPENAI_MODEL": "unknown"}, {"CQA_LLM_PRICE_VERSION": ""}])
+def test_unknown_model_or_price_version_has_no_reservation_or_sdk_attempt(change):
+    guard = RecordingGuard()
+    configured = Settings(
+        **dict(_env_file=None, OPENAI_API_KEY=SECRET, CQA_LLM_PRICE_VERSION=PRICE_VERSION) | change
+    )
+    with pytest.raises(EvaluationError) as err:
+        run_with_transport(
+            lambda request: pytest.fail("SDK must not be called"),
+            guard=guard,
+            configured=configured,
+        )
+    assert err.value.code == "AI_BUDGET_POLICY_UNSUPPORTED"
+    assert err.value.provenance["usage"]["request_count"] == 0
+    assert guard.reservations == []
+
+
+@pytest.mark.parametrize(
+    "code",
+    ["AI_BUDGET_DISABLED", "AI_BUDGET_EXCEEDED", "AI_BUDGET_RESERVATION_CONFLICT"],
+)
+def test_local_reservation_refusal_is_not_a_paid_attempt(code):
+    class RefusingGuard(RecordingGuard):
+        async def reserve(self, **kwargs):
+            raise EvaluationError(code)
+
+    guard = RefusingGuard()
+    with pytest.raises(EvaluationError) as err:
+        run_with_transport(lambda request: pytest.fail("SDK must not be called"), guard=guard)
+    assert err.value.code == code and not err.value.retryable
+    assert err.value.provenance["usage"]["request_count"] == 0
+    assert guard.settlements == []
+
+
+def test_transient_reservation_wait_does_not_start_or_consume_attempt(caplog):
+    async def run():
+        source, rubric, payload = fixtures()
+        entered, release = asyncio.Event(), asyncio.Event()
+        calls = []
+
+        class WaitingGuard(RecordingGuard):
+            async def reserve(self, **kwargs):
+                entered.set()
+                await release.wait()
+                return await super().reserve(**kwargs)
+
+        guard = WaitingGuard()
+
+        def handler(request):
+            calls.append(True)
+            return httpx.Response(200, json=response(payload))
+
+        async with AsyncOpenAI(
+            api_key=SECRET,
+            max_retries=0,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        ) as client:
+            pipeline = EvaluationPipeline(
+                settings(), provider=OpenAIProvider(settings(), client=client, budget_guard=guard)
+            )
+            with evaluation_scope("synthetic-wait"):
+                task = asyncio.create_task(pipeline.evaluate(transcript=source, checklist=rubric))
+            await asyncio.wait_for(entered.wait(), timeout=1)
+            assert calls == guard.reservations == []
+            assert "event=ai_request_started" not in caplog.text
+            release.set()
+            result = await task
+        assert len(calls) == len(guard.reservations) == len(guard.settlements) == 1
+        assert guard.reservations[0][1] == 1
+        assert result.provenance["usage"]["request_count"] == 1
+
+    with caplog.at_level(logging.INFO, logger="cqa.evaluation"):
+        asyncio.run(run())
+
+
+def test_paid_invalid_usage_settles_even_when_next_reservation_is_refused():
+    _, _, payload = fixtures()
+    bad = copy.deepcopy(payload)
+    bad["criterion_results"][0]["answer"] = 1
+    calls = []
+
+    class OneRequestGuard(RecordingGuard):
+        async def reserve(self, **kwargs):
+            if self.reservations:
+                raise EvaluationError("AI_BUDGET_EXCEEDED")
+            return await super().reserve(**kwargs)
+
+    def handler(request):
+        calls.append(True)
+        return httpx.Response(200, json=response(bad))
+
+    guard = OneRequestGuard()
+    with pytest.raises(EvaluationError) as err:
+        run_with_transport(handler, guard=guard)
+    assert err.value.code == "AI_BUDGET_EXCEEDED"
+    assert len(calls) == len(guard.reservations) == len(guard.settlements) == 1
+    assert guard.settlements[0][1].input_tokens == 100
+    assert err.value.provenance["usage"]["request_count"] == 1
+    assert err.value.provenance["usage"]["total_tokens"] == 120
+
+
+@pytest.mark.parametrize("kind", ["missing", "partial", "inconsistent", "model", "tier"])
+def test_unknown_or_incompatible_usage_retains_full_reservation(kind):
+    _, _, payload = fixtures()
+    body = response(payload)
+    if kind == "missing":
+        body["usage"] = None
+    elif kind == "partial":
+        body["usage"]["output_tokens_details"] = None
+    elif kind == "inconsistent":
+        body["usage"]["total_tokens"] = 121
+    elif kind == "model":
+        body["model"] = "different-model"
+    elif kind == "tier":
+        body["service_tier"] = "priority"
+    guard = RecordingGuard()
+    if kind in {"model", "tier"}:
+        with pytest.raises(EvaluationError) as err:
+            run_with_transport(lambda request: httpx.Response(200, json=body), guard=guard)
+        assert err.value.code == "AI_BUDGET_POLICY_UNSUPPORTED"
+        assert err.value.provenance["usage"]["request_count"] == 1
+    else:
+        result = run_with_transport(lambda request: httpx.Response(200, json=body), guard=guard)
+        assert result.provenance["usage"]["request_count"] == 1
+    assert len(guard.reservations) == 1 and guard.settlements == [("synthetic-1", None)]
+
+
+def test_settlement_failure_stops_retries_and_preserves_paid_usage_safely(caplog):
+    _, _, payload = fixtures()
+    calls = []
+
+    class BrokenGuard(RecordingGuard):
+        async def settle(self, **kwargs):
+            raise RuntimeError(SECRET)
+
+    def handler(request):
+        calls.append(True)
+        return httpx.Response(200, json=response(payload))
+
+    with (
+        caplog.at_level(logging.INFO, logger="cqa.evaluation"),
+        pytest.raises(EvaluationError) as err,
+    ):
+        run_with_transport(handler, guard=BrokenGuard())
+    assert err.value.code == "AI_BUDGET_UNAVAILABLE" and not err.value.retryable
+    assert len(calls) == err.value.provenance["usage"]["request_count"] == 1
+    assert err.value.provenance["usage"]["total_tokens"] == 120
+    assert SECRET not in caplog.text + str(err.value)
+
+
+@pytest.mark.parametrize("unsafe", ["retries", "redirects", "base"])
+def test_injected_sdk_cannot_enable_hidden_requests(unsafe):
+    async def run():
+        source, rubric, _ = fixtures()
+        guard = RecordingGuard()
+        async with AsyncOpenAI(
+            api_key=SECRET,
+            max_retries=1 if unsafe == "retries" else 0,
+            base_url="https://invalid.example/v1"
+            if unsafe == "base"
+            else "https://api.openai.com/v1",
+            http_client=httpx.AsyncClient(
+                transport=httpx.MockTransport(lambda request: pytest.fail("No HTTP request")),
+                follow_redirects=unsafe == "redirects",
+            ),
+        ) as client:
+            provider = OpenAIProvider(settings(), client=client, budget_guard=guard)
+            with evaluation_scope("synthetic-unsafe-sdk"), pytest.raises(EvaluationError) as err:
+                await provider.evaluate(
+                    TranscriptSnapshot.model_validate(source),
+                    ChecklistSnapshot.model_validate(rubric),
+                    PROMPT_VERSION,
+                )
+        assert err.value.code == "AI_BUDGET_POLICY_UNSUPPORTED"
+        assert err.value.provenance["usage"]["request_count"] == 0
+        assert guard.reservations == []
+
+    asyncio.run(run())
+
+
+def test_sdk_constructor_failure_closes_client_retains_reserve_safely(monkeypatch, caplog):
+    import app.evaluation.provider as module
+
+    created = []
+
+    class BrokenSDK:
+        def __init__(self, **kwargs):
+            created.append(kwargs)
+            raise RuntimeError(SECRET)
+
+    monkeypatch.setattr(module, "AsyncOpenAI", BrokenSDK)
+
+    async def run():
+        source, rubric, _ = fixtures()
+        guard = RecordingGuard()
+        provider = OpenAIProvider(settings(), budget_guard=guard)
+        with evaluation_scope("synthetic-constructor"), pytest.raises(EvaluationError) as err:
+            await provider.evaluate(
+                TranscriptSnapshot.model_validate(source),
+                ChecklistSnapshot.model_validate(rubric),
+                PROMPT_VERSION,
+            )
+        assert err.value.code == "AI_UNAVAILABLE"
+        assert err.value.provenance["usage"]["request_count"] == 0
+        assert guard.settlements == [("synthetic-1", None)]
+        assert created[0]["http_client"].is_closed
+        assert created[0]["http_client"].follow_redirects is False
+        assert created[0]["base_url"] == "https://api.openai.com/v1"
+        assert created[0]["max_retries"] == 0
+        await provider.aclose()
+
+    with caplog.at_level(logging.INFO):
+        asyncio.run(run())
+    assert SECRET not in caplog.text
+
+
+@pytest.mark.parametrize("builder", ["build_input", "response_schema"])
+def test_payload_build_failure_is_not_an_sdk_attempt_or_reservation(builder, monkeypatch, caplog):
+    import app.evaluation.provider as module
+
+    def broken(*args):
+        raise ValueError(SECRET)
+
+    monkeypatch.setattr(module, builder, broken)
+    guard = RecordingGuard()
+    with caplog.at_level(logging.INFO), pytest.raises(EvaluationError) as err:
+        run_with_transport(lambda request: pytest.fail("No SDK request"), guard=guard)
+    assert err.value.code == "AI_UNAVAILABLE"
+    assert err.value.provenance["usage"]["request_count"] == 0
+    assert guard.reservations == guard.settlements == []
+    assert SECRET not in caplog.text + str(err.value)
+
+
+def test_request_and_provenance_remain_bound_to_quote_during_guard_wait():
+    _, _, payload = fixtures()
+    configured = settings()
+    captured = []
+
+    class MutatingGuard(RecordingGuard):
+        async def reserve(self, **kwargs):
+            # Simulates configuration changing while an async reservation waits.
+            configured.openai_model = "different-model"
+            configured.llm_max_output_tokens = 64000
+            configured.llm_reasoning_effort = "high"
+            return await super().reserve(**kwargs)
+
+    def handler(request):
+        captured.append(json.loads(request.content))
+        return httpx.Response(200, json=response(payload))
+
+    guard = MutatingGuard()
+    result = run_with_transport(handler, configured=configured, guard=guard)
+    assert captured[0]["model"] == result.provenance["model_requested"] == "gpt-6-luna"
+    assert captured[0]["max_output_tokens"] == guard.reservations[0][2].max_output_tokens == 12000
+    assert captured[0]["reasoning"] == {"effort": "medium"}

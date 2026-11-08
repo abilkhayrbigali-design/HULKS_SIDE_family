@@ -57,6 +57,7 @@ import {
   TabsTrigger,
 } from "../components/ui/tabs";
 import { useWorkspace } from "../workspace/context";
+import { BudgetNotice, useBudget } from "../workspace/budget";
 const roles = {
   operator: "Оператор",
   client: "Клиент",
@@ -95,6 +96,7 @@ export function ConversationView({
   evaluationId: string | null;
 }) {
   const workspace = useWorkspace();
+  const budget = useBudget();
   const mounted = useRef(false);
   const context = useRef({
     key: `${id}:${evaluationId ?? "latest"}`,
@@ -258,7 +260,7 @@ export function ConversationView({
           if (["running", "queued"].includes(next.status))
             timer = setTimeout(poll, 2000);
           else if (["completed", "failed"].includes(next.status))
-            workspace.refreshQueue();
+            { workspace.refreshQueue(); void budget.refresh(); }
         }
       } catch (e) {
         if (active && isCurrent()) {
@@ -404,7 +406,7 @@ export function ConversationView({
     requestAnimationFrame(() => applyEvidenceScroll());
   };
   const start = async () => {
-    if (!versionId) return;
+    if (!versionId || !budget.allowed) return;
     setBusy(true);
     setActionError(undefined);
     try {
@@ -419,6 +421,7 @@ export function ConversationView({
       if (isCurrent()) setActionError(e);
     } finally {
       if (isCurrent()) setBusy(false);
+      void budget.refresh();
     }
   };
   const final = ready ? evaluation?.final : null;
@@ -770,7 +773,7 @@ export function ConversationView({
                       </select>
                     </label>
                     <Button
-                      disabled={busy || !versionId || polling}
+                      disabled={busy || !versionId || polling || !budget.allowed}
                       onClick={() => void start()}
                     >
                       <Play size={14} />
@@ -780,6 +783,7 @@ export function ConversationView({
                   <p className="control-note">
                     Новый запуск использует последнюю версию транскрипта.
                   </p>
+                  <BudgetNotice />
                   {!checklists.length && (
                     <a className="text-button" href="#/checklists">
                       Создать чек-лист

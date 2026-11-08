@@ -11,6 +11,11 @@ MESSAGES = {
     "AI_REQUEST_REJECTED": "AI service rejected the evaluation request.",
     "AI_REFUSED": "AI declined to evaluate this dialogue. Manual review is required.",
     "AI_INCOMPLETE": "AI did not finish the evaluation. Please retry or request review.",
+    "AI_BUDGET_DISABLED": "AI budget is disabled or evaluation context is unavailable.",
+    "AI_BUDGET_EXCEEDED": "AI budget is insufficient for another request.",
+    "AI_BUDGET_POLICY_UNSUPPORTED": "AI model or pricing policy is not supported.",
+    "AI_BUDGET_UNAVAILABLE": "AI budget accounting is temporarily unavailable.",
+    "AI_BUDGET_RESERVATION_CONFLICT": "AI request reservation has already been used.",
 }
 
 

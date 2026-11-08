@@ -236,7 +236,7 @@ ProviderResult: `{ criterion_results, provider, model_requested, model_reported,
 - Новое поле по возможности добавляется совместимо. Переименование/удаление поля требует общей правки документов, клиента, сервера и проверок в согласованном порядке.
 - Декларативный контракт не является готовым сервером. Согласованные маршруты должны быть подтверждены первым работающим сквозным сценарием A-03.
 
-## 6. Пакетная оценка и официальный экспорт (D-023/D-024)
+## 6. Пакетная оценка и официальный экспорт (D-023/D-024/D-027)
 
 Пакет использует существующий worker и не меняет единичный evaluation API.
 Все операции ниже работают с сохранёнными версиями; экспорт не вызывает AI.
@@ -247,9 +247,11 @@ ProviderResult: `{ criterion_results, provider, model_requested, model_reported,
 | `GET /evaluation-batches` | `limit/offset` →`Page[EvaluationBatch]`, новые первыми |
 | `GET /evaluation-batches/{id}` | Текущее состояние всех сохранённых запусков пакета |
 | `POST /evaluation-batches/{id}/retry-failed` | Без body; после завершения создаёт/возвращает дочерний пакет полного состава; новые задания только failed |
-| `POST /submission-exports` | `{batch_id, team_name}` →200 официальный JSON 1.0, `Content-Disposition: attachment; filename="results.json"` |
+| `POST /submission-preflights` | `{batch_id, expected_conversation_ids, expected_total_records}` →200 `SubmissionPreflightResponse`; только сверка без записи и AI |
+| `POST /submission-exports` | `{batch_id, team_name, expected_conversation_ids, expected_total_records}` →200 официальный JSON 1.0, `Content-Disposition: attachment; filename="results.json"` |
 
-Создание требует настроенного AI, как одиночный запуск; тестовая Python-инъекция
+Создание требует настроенного AI и доступного общего бюджета, как одиночный запуск;
+каждая фактическая SDK-попытка отдельно резервирует деньги по разделу7. Тестовая Python-инъекция
 остаётся только тестовой. `request_id` — UUID, `conversation_ids` — от1 до1000
 уникальных UUID. Сервер атомарно проверяет весь набор и фиксирует текущую версию
 каждого транскрипта и выбранную версию чек-листа. Один request_id повторяет тот же
@@ -271,12 +273,31 @@ evaluations переиспользуются, новые создаются то
 одну незаметную попытку. Перезапуск приложения использует имеющуюся recovery policy:
 queued продолжаются, running получают failed/INTERRUPTED.
 
-Экспорт принимает непустой team_name после strip, максимум200 символов. Один
-batch должен соответствовать одному набору сдачи; UI показывает весь выбранный
-состав и число диалогов, независимо от25 строк текущей страницы. Сервер не добавляет
-пропущенные диалоги и не утверждает, что выбран весь выданный организаторами набор.
-Повторяющиеся исходные external IDs отклоняются409. Пользователь сохраняет файл
-локально; приложение не делает commit/push и не выгружает частные данные автоматически.
+Экспорт принимает непустой team_name после strip, максимум200 символов. Обязательный
+reference — `expected_conversation_ids`: от1 до1000 уникальных **внешних строковых** ID,
+не UUID приложения. Применяется та же нормализация Text/trim, что при импорте;
+дубликаты после trim запрещены. `expected_total_records` — строгое целое от1 до1000,
+равное длине списка. Legacy body без reference, неверные типы, дубликаты и
+несогласованный total возвращают422. JSON Schema проверяет структуру и границы;
+равенство total длине и уникальность после нормализации проверяет сервер.
+
+Пользователь получает reference из отдельного исходного JSON; UI не вычисляет его
+из выбранного пакета и не сохраняет исходный текст в storage. Поддерживаются
+организаторский envelope (`isSuccess=true`, без ошибки, `data.records` и согласованный
+`data.total_records`) и upload-объект `records` с проверкой total при наличии.
+Ограничение файла —16MiB. Подлинность исходного набора этим не доказывается.
+
+`SubmissionPreflightResponse` содержит неотрицательные целые `expected_count`,
+`batch_count`, `missing_count`, `extra_count` и boolean `matches`. Валидное
+несовпадение —200/matches=false, даже при равных общих count; отсутствующий batch —404.
+Операция не возвращает тексты/ID диалогов, не меняет БД и не запускает AI.
+Экспорт повторно сравнивает точные множества внешних ID и при несовпадении возвращает
+409 `SUBMISSION_SCOPE_MISMATCH`; сообщение содержит только фиксированный текст и
+безопасные числовые счётчики, details остаётся loc/type. Повторяющиеся исходные
+external IDs в пакете также отклоняются409. Сервер не добавляет пропущенные диалоги.
+UI разрешает download только после успешной сверки текущего batch/reference.
+Пользователь сохраняет файл локально; приложение не делает commit/push и не
+выгружает частные данные автоматически.
 
 Формат проверен по `CQA_Student_Guide_Appendix_Results.pdf`, стр.2–3:
 `{schema_version:"1.0", team_name, model:{mode,name}, results:[...]}`.
@@ -297,3 +318,51 @@ review_required дают `{conversation_id,status:"error",criteria:[],score:null
 реальных попыток; если попыток нет — `not_run`. Это явное отсутствие запуска,
 а не название измеренной модели. Ограничение проверки: offline synthetic provider;
 человеческая точность и новый live-прогон не заявляются.
+
+## 7. Общий бюджет AI (D-027)
+
+`GET /api/v1/ai-budget` — read-only, без body, записи баланса, резерва и AI-вызова.
+Успешный ответ200 `AIBudget`:
+
+| Поле | Тип и смысл |
+| --- | --- |
+| `currency` | literal `USD` |
+| `limit_usd` | Общий абсолютный потолок приложения |
+| `committed_upper_usd` | Учтённая консервативная верхняя стоимость, не invoice |
+| `reserved_usd` | Сумма занятых и неизвестных резервов |
+| `available_usd` | max(0, limit − committed − reserved) |
+| `next_request_upper_usd` | Верхний резерв следующей попытки либо null при неизвестной policy |
+| `active_reservations`, `unknown_reservations` | Неотрицательные целые счётчики |
+| `model`, `service_tier`, `pricing_version` | Строка модели, literal `default`, известная pricing version либо null |
+| `accounting_started_at` | Время начала ledger в ISO UTC; старые вызовы автоматически не учтены |
+| `enabled`, `blocked_reason` | Boolean допуска следующего полного резерва; nullable безопасный код |
+
+Все пять денежных полей — JSON-строки с ровно6 знаками после точки, например
+`"0.587400"`; только `next_request_upper_usd` допускает null. Их нельзя отдавать
+как float. Внутренний ledger использует целые microUSD (1USD=1000000microUSD).
+`enabled=true` требует известной policy и доступного полного следующего резерва.
+Ошибка чтения ledger —503 `AI_BUDGET_UNAVAILABLE`; отсутствие API-ключа само по
+себе не мешает чтению бюджета. Ошибки имеют общий формат Error/details loc/type.
+
+Настройки: `CQA_AI_BUDGET_USD=0` по умолчанию, конечный Decimal >=0, максимум
+6 значащих дробных знаков и9223372036854.775807USD; `CQA_LLM_SERVICE_TIER=default`
+(другие tier отклоняются); `CQA_LLM_PRICE_VERSION=` по умолчанию пустая. Известная
+policy — `gpt-6-luna-standard-2026-11-08-v1`. Неизвестная модель/version запрещает
+SDK, но сохраняет чтение/импорт/апелляции/экспорт. Наличие ключа не разрешает расходы.
+Изменение cap при startup не обнуляет учтённые суммы или резервы.
+
+Перед каждым `responses.create`, включая повторы, атомарно резервируется полный
+upper quote. SQL-транзакция не держится во время сети/ожидания. SDK retries и
+redirects отключены; явные default tier/store=false закреплены на границе provider.
+Известный валидный usage освобождает только неиспользованную часть; неизвестный,
+частичный, невалидный usage или неопределённый исход сохраняет весь резерв.
+После restart незавершённый резерв становится unknown и автоматически не освобождается.
+Историческое `provenance.estimated_cost_usd` сохраняет прежний number|null контракт
+и остаётся null: ledger — отдельная верхняя оценка, не подтверждённый счёт OpenAI.
+
+Неповторяемые финансовые отказы: `AI_BUDGET_DISABLED`, `AI_BUDGET_EXCEEDED`,
+`AI_BUDGET_POLICY_UNSUPPORTED`, `AI_BUDGET_UNAVAILABLE`, `AI_BUDGET_RESERVATION_CONFLICT`.
+`AI_BUDGET_WAITING` описывает временно занятые активной попыткой деньги в read-only
+статусе: guard ожидает освобождения без нового SDK/attempt/retry-count. Unknown hold
+не считается временно освобождаемым. UI при loading/unknown/ошибке бюджета блокирует
+новые AI-действия, сохраняя доступ к операциям чтения и экспорту.

@@ -98,10 +98,12 @@ export function Modal({
   title,
   onClose,
   children,
+  description = "Импорт группы данных или загрузка JSON с транскриптами.",
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  description?: string;
 }) {
   const previousFocus = useRef(document.activeElement as HTMLElement | null),
     closeButton = useRef<HTMLButtonElement>(null);
@@ -138,7 +140,7 @@ export function Modal({
           </Button>
         </header>
         <SheetDescription className="sr-only">
-          Импорт группы данных или загрузка JSON с транскриптами.
+          {description}
         </SheetDescription>
         <div className="import-sheet-body">{children}</div>
       </SheetContent>

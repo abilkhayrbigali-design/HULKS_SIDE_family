@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
-import { fixture, mockAPI } from "./helpers/mock-api";
+import { fixture, mockAPI, syntheticBudget } from "./helpers/mock-api";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const version = fixture("checklist-version.response.json").id;
@@ -26,7 +26,7 @@ async function setup(page: Page, count = 101) {
     ...original,
     conversations,
     batches: [] as ReturnType<typeof makeBatch>[],
-    creates: [] as any[], retries: [] as string[], exports: [] as any[],
+    creates: [] as any[], retries: [] as string[], exports: [] as any[], preflights: [] as any[],
     reads: [] as string[], queueReads: 0,
     noKey: false, loseResponse: false, readFailure: false, exportConflict: false,
     document: { schema_version: "1.0", team_name: "HULK’S FAMILY", model: { name: "synthetic", mode: "external_api" }, results: [{ conversation_id: "synthetic-batch-1", status: "error", error: { code: "AI_TIMEOUT" } }] },
@@ -74,7 +74,29 @@ async function setup(page: Page, count = 101) {
     if (s.exportConflict) return route.fulfill({ status: 409, json: { error: { code: "SUBMISSION_CHECKLIST_INCOMPATIBLE", message: "PRIVATE_BATCH_SERVER_MARKER", details: [] } } });
     return route.fulfill({ json: s.document, headers: { "Content-Disposition": "attachment; filename=results.json" } });
   });
+  await page.route("**/api/v1/submission-preflights", async (route) => {
+    const body = route.request().postDataJSON();
+    s.preflights.push(body);
+    const batch = s.batches.find((b) => b.id === body.batch_id)!;
+    const actual = new Set(batch.items.map((item) => s.conversations.find((c) => c.id === item.conversation_id)!.external_id));
+    const expected = new Set<string>(body.expected_conversation_ids);
+    const missing = [...expected].filter((id) => !actual.has(id)).length;
+    const extra = [...actual].filter((id) => !expected.has(id)).length;
+    return route.fulfill({ json: { expected_count: expected.size, batch_count: actual.size, missing_count: missing, extra_count: extra, matches: missing === 0 && extra === 0 } });
+  });
   return s;
+}
+async function uploadReference(page: Page, ids: string[]) {
+  await page.getByLabel("Исходный JSON для сверки", { exact: true }).setInputFiles({
+    name: "synthetic-source.json", mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ isSuccess: true, error: null, data: { total_records: ids.length, records: ids.map((conversation_id) => ({ conversation_id })) } })),
+  });
+  await expect(page.getByRole("button", { name: "Проверить состав", exact: true })).toBeEnabled();
+}
+async function matchReference(page: Page, ids: string[]) {
+  await uploadReference(page, ids);
+  await page.getByRole("button", { name: "Проверить состав", exact: true }).click();
+  await expect(page.getByText("Состав совпадает", { exact: true })).toBeVisible();
 }
 async function prepare(page: Page) {
   await page.goto("/#/batches");
@@ -105,12 +127,13 @@ test("full scope, explicit launch, retained progress, failed-only retry and save
   await page.reload();
   await expect(page.getByRole("heading", { name: "Пакет завершён" })).toBeVisible();
   expect(s.creates).toHaveLength(1);
+  await matchReference(page, s.conversations.map((c) => c.external_id));
   const downloadEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "Скачать results.json", exact: true }).click();
   const download = await downloadEvent;
   expect(download.suggestedFilename()).toBe("results.json");
   expect(JSON.parse(readFileSync((await download.path())!, "utf8"))).toEqual(s.document);
-  expect(s.exports).toEqual([{ batch_id: id(3000), team_name: "HULK’S FAMILY" }]);
+  expect(s.exports).toEqual([{ batch_id: id(3000), team_name: "HULK’S FAMILY", expected_conversation_ids: s.conversations.map((c) => c.external_id), expected_total_records: 101 }]);
   expect(s.creates).toHaveLength(1);
   await page.getByRole("button", { name: "Повторить ошибки · 2", exact: true }).click();
   await expect(page.locator(".batch-counts")).toContainText("Всего101");
@@ -194,6 +217,7 @@ test("a polling failure stops retries and official-format refusal remains action
   await page.getByRole("button", { name: "Повторить", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveCount(0);
   s.exportConflict = true;
+  await matchReference(page, [s.conversations[0].external_id]);
   await page.getByRole("button", { name: "Скачать results.json", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("несовместим");
   expect(s.consoleLines.join(" ")).toContain("event=ui_operation_failed status=409 error=SUBMISSION_CHECKLIST_INCOMPATIBLE");
@@ -264,6 +288,7 @@ test("all-failed export stays downloadable and pending export suppresses duplica
   });
   await page.goto("/#/batches");
   await page.getByLabel("Сохранённые пакеты", { exact: true }).selectOption(id(3000));
+  await matchReference(page, [s.conversations[0].external_id]);
   await page.getByRole("button", { name: "Скачать results.json", exact: true }).click();
   await expect.poll(() => started).toBe(true);
   await expect(page.getByRole("button", { name: "Готовим файл…", exact: true })).toBeDisabled();
@@ -301,4 +326,151 @@ test("a successful checklist list cannot hide a concurrent version-loading failu
   await page.getByRole("button", { name: "Повторить", exact: true }).click();
   await expect(page.getByLabel("Версия чек-листа пакета")).toHaveValue(version);
   await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("export requires an independent source set even when the selected count is equal", async ({ page }) => {
+  const s = await setup(page, 2);
+  s.batches.push(makeBatch(3000, [id(100), id(101)], id(4000), 2));
+  await page.goto("/#/batches");
+  await page.getByLabel("Сохранённые пакеты", { exact: true }).selectOption(id(3000));
+  const download = page.getByRole("button", { name: "Скачать results.json", exact: true });
+  await expect(download).toBeDisabled();
+  await uploadReference(page, ["different-source-A", "different-source-B"]);
+  await page.getByRole("button", { name: "Проверить состав", exact: true }).click();
+  await expect(page.getByText("Состав не совпадает", { exact: true })).toBeVisible();
+  await expect(page.locator(".submission-counts")).toContainText("Пропущено2");
+  await expect(page.locator(".submission-counts")).toContainText("Лишних2");
+  await expect(download).toBeDisabled();
+  expect(s.preflights[0].expected_conversation_ids).toEqual(["different-source-A", "different-source-B"]);
+  expect(s.exports).toHaveLength(0);
+  await page.screenshot({ path: "test-results/readiness-reference-synthetic.png", fullPage: true });
+  await matchReference(page, s.conversations.map((c) => c.external_id));
+  await expect(download).toBeEnabled();
+  expect(s.creates).toHaveLength(0);
+  expect(s.retries).toHaveLength(0);
+  expect(s.consoleLines.join(" ")).not.toContain("different-source-A");
+  await page.reload();
+  await expect(download).toBeDisabled();
+  await expect(page.getByText("Эталон из файла:", { exact: false })).toHaveCount(0);
+});
+
+test("late preflight cannot validate another reference or a remounted batch", async ({ page }) => {
+  const s = await setup(page, 2);
+  s.batches.push(makeBatch(3000, [id(100)], id(4000), 1), makeBatch(3001, [id(101)], id(4001), 1));
+  let release!: () => void, started = false;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/v1/submission-preflights", async (route) => { started = true; await held; return route.fallback(); });
+  await page.goto("/#/batches");
+  const selector = page.getByLabel("Сохранённые пакеты", { exact: true });
+  await selector.selectOption(id(3000));
+  await uploadReference(page, [s.conversations[0].external_id]);
+  await page.getByRole("button", { name: "Проверить состав", exact: true }).click();
+  await expect.poll(() => started).toBe(true);
+  await uploadReference(page, ["replacement-source"]);
+  await selector.selectOption(id(3001));
+  await expect(page.getByRole("heading", { name: "Пакет завершён" })).toBeVisible();
+  await selector.selectOption(id(3000));
+  release();
+  await expect.poll(() => s.preflights.length).toBe(1);
+  await expect(page.getByText("Состав совпадает", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Скачать results.json", exact: true })).toBeDisabled();
+  expect(s.exports).toHaveLength(0);
+});
+
+test("late source-file read cannot overwrite a newer validated reference", async ({ page }) => {
+  const s = await setup(page, 2);
+  s.batches.push(makeBatch(3000, [id(100)], id(4000), 1));
+  await page.addInitScript(() => {
+    const original = File.prototype.text;
+    (window as any).sourceStarted = false;
+    File.prototype.text = async function () {
+      if (this.name === "slow-source.json") {
+        (window as any).sourceStarted = true;
+        await new Promise<void>((resolve) => { (window as any).releaseSource = resolve; });
+      }
+      return original.call(this);
+    };
+  });
+  await page.goto("/#/batches");
+  await page.getByLabel("Сохранённые пакеты", { exact: true }).selectOption(id(3000));
+  await page.getByLabel("Исходный JSON для сверки", { exact: true }).setInputFiles({ name: "slow-source.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ records: [{ conversation_id: "obsolete-A" }, { conversation_id: "obsolete-B" }] })) });
+  await expect.poll(() => page.evaluate(() => (window as any).sourceStarted)).toBe(true);
+  await matchReference(page, [s.conversations[0].external_id]);
+  await page.evaluate(() => (window as any).releaseSource());
+  await expect(page.getByText("Эталон из файла: 1 диалогов · пакет: 1", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Скачать results.json", exact: true })).toBeEnabled();
+  expect(s.preflights[0].expected_conversation_ids).toEqual([s.conversations[0].external_id]);
+  expect(s.creates).toHaveLength(0);
+  expect(s.exports).toHaveLength(0);
+});
+
+test("scope rejection invalidates a previously successful preflight without exposing IDs", async ({ page }) => {
+  const s = await setup(page, 1);
+  s.batches.push(makeBatch(3000, [id(100)], id(4000), 1));
+  await page.route("**/api/v1/submission-exports", (route) => route.fulfill({ status: 409, json: { error: { code: "SUBMISSION_SCOPE_MISMATCH", message: "PRIVATE_REFERENCE_MARKER", details: [] } } }));
+  await page.goto("/#/batches");
+  await page.getByLabel("Сохранённые пакеты", { exact: true }).selectOption(id(3000));
+  await matchReference(page, [s.conversations[0].external_id]);
+  await page.getByRole("button", { name: "Скачать results.json", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("SUBMISSION_SCOPE_MISMATCH");
+  await expect(page.getByRole("button", { name: "Скачать results.json", exact: true })).toBeDisabled();
+  await expect(page.locator("body")).not.toContainText("PRIVATE_REFERENCE_MARKER");
+  expect(s.consoleLines.join(" ")).toContain("event=ui_operation_failed status=409 error=SUBMISSION_SCOPE_MISMATCH");
+  expect(s.consoleLines.join(" ")).not.toContain("PRIVATE_REFERENCE_MARKER");
+});
+
+test("zero global budget blocks batch creation and retry while saved export remains available", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const s = await setup(page, 1);
+  s.batches.push(makeBatch(3000, [id(100)], id(4000), 1));
+  await page.route("**/api/v1/ai-budget", (route) => route.fulfill({ json: { ...syntheticBudget(), limit_usd: "0.000000", available_usd: "0.000000", enabled: false, blocked_reason: "AI_BUDGET_DISABLED" } }));
+  await prepare(page);
+  await expect(page.getByRole("button", { name: "Запустить пакет · 1", exact: true })).toBeDisabled();
+  await page.getByLabel("Сохранённые пакеты", { exact: true }).selectOption(id(3000));
+  await expect(page.getByRole("button", { name: "Повторить ошибки · 1", exact: true })).toBeDisabled();
+  await matchReference(page, [s.conversations[0].external_id]);
+  await expect(page.getByRole("button", { name: "Скачать results.json", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: /Бюджет AI:/ }).click();
+  await expect(page.getByRole("dialog")).toContainText("0.000000 USD");
+  await expect.poll(() => page.getByRole("dialog").evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return box.left >= -1 && box.right <= innerWidth + 1;
+  })).toBe(true);
+  expect(await page.getByRole("dialog").locator("input").count()).toBe(0);
+  await page.screenshot({ path: "test-results/readiness-budget-narrow-synthetic.png", fullPage: true });
+  expect(s.creates).toHaveLength(0);
+  expect(s.retries).toHaveLength(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});
+
+test("financial creation denial is nonretryable and does not restore an unconfirmed POST", async ({ page }) => {
+  const s = await setup(page, 1);
+  let posts = 0;
+  await page.route("**/api/v1/evaluation-batches", (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    posts++;
+    return route.fulfill({ status: 409, json: { error: { code: "AI_BUDGET_EXCEEDED", message: "PRIVATE_BUDGET_MARKER", details: [] } } });
+  });
+  await prepare(page);
+  await page.getByRole("button", { name: "Запустить пакет · 1", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("AI_BUDGET_EXCEEDED");
+  await expect(page.getByRole("button", { name: "Повторить запрос запуска", exact: true })).toHaveCount(0);
+  await page.waitForTimeout(2300);
+  expect(posts).toBe(1);
+  expect(s.consoleLines.join(" ")).not.toContain("PRIVATE_BUDGET_MARKER");
+  await expect(page.locator("body")).not.toContainText("PRIVATE_BUDGET_MARKER");
+  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("cqa.batch")!).attempt)).toBeNull();
+});
+
+test("financial retry denial preserves an unrelated transport-uncertain creation request", async ({ page }) => {
+  const s = await setup(page, 1);
+  s.batches.push(makeBatch(3000, [id(100)], id(4000), 1));
+  const attempt = { request_id: id(4999), conversation_ids: [id(100)], checklist_version_id: version };
+  await page.addInitScript(({ batchId, attempt }) => sessionStorage.setItem("cqa.batch", JSON.stringify({ id: batchId, attempt })), { batchId: id(3000), attempt });
+  await page.route("**/api/v1/evaluation-batches/*/retry-failed", (route) => route.fulfill({ status: 409, json: { error: { code: "AI_BUDGET_EXCEEDED", message: "PRIVATE_BUDGET_MARKER", details: [] } } }));
+  await page.goto("/#/batches");
+  await page.getByRole("button", { name: "Повторить ошибки · 1", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("AI_BUDGET_EXCEEDED");
+  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("cqa.batch")!).attempt)).toEqual(attempt);
+  expect(s.creates).toHaveLength(0);
 });

@@ -91,3 +91,24 @@ Frontend передаёт только фиксированное событие
 в журнале только результат/счётчики и фиксированный код, без путей, case IDs,
 имён аудиторов и содержимого human labels. Сценарии проверки: no-key batch503,
 частичный failed, конфликт request_id, несовместимый экспорт и невалидный human draft.
+
+## Полнота сдачи и денежный учёт (A-21, D-027)
+
+`cqa.submissions` дополняется WARNING `submission_export_rejected` с фиксированным
+`SUBMISSION_SCOPE_MISMATCH` и числовыми `records/missing/extra`. Сами expected/actual ID
+не выводятся. Preflight использует одну обычную HTTP-сводку; отдельного журнала
+чтения файла или polling нет. Filename, reference JSON и название команды не логируются.
+
+`cqa.budget` записывает INFO `ai_budget_initialized` с числом восстановленных резервов,
+`ai_budget_reserved`, `ai_budget_waiting` (однократно за ожидание) и `ai_budget_settled`
+для известного учёта. Неизвестный исход даёт WARNING `ai_budget_settled status=unknown`;
+отказ — WARNING `ai_budget_rejected` с фиксированным финансовым кодом. Сбой БД —
+ERROR `ai_budget_failed error=AI_BUDGET_UNAVAILABLE` и одна безопасная диагностика
+`cqa.errors`. Не выводятся суммы/настройки, evaluation/reservation IDs или SQL payload.
+
+Provider сохраняет `cqa.evaluation`: `ai_budget_rejected`, `ai_budget_retained` и
+`ai_request_interrupted` дополняют события фактических попыток. Ожидание резерва и
+локальный отказ до SDK не увеличивают `request_count`. Сценарии регрессии: нулевой
+лимит, неизвестная policy, недостаток/временная занятость квоты, таймаут/отмена с
+сохранением unknown, ошибка БД, несовпадение reference. Проверяются безопасный код,
+уровень, отсутствие синтетических секретных маркеров и сохранность учёта/истории.

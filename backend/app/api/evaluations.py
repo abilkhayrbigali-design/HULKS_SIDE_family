@@ -9,6 +9,7 @@ from app.api.batches import require_ai
 from app.api.routes.data import DB, Limit, Offset, page
 from app.models.evaluations import Appeal, Evaluation
 from app.schemas import responses
+from app.schemas.budget import AIBudget
 from app.schemas.evaluations import (
     AppealCreate,
     AppealStatus,
@@ -17,8 +18,22 @@ from app.schemas.evaluations import (
     Status,
 )
 from app.services import evaluations
+from app.services.errors import ServiceError
 
 router = APIRouter(prefix="/api/v1")
+
+
+@router.get("/ai-budget", response_model=AIBudget)
+def get_ai_budget(request: Request):
+    from app.evaluation.errors import EvaluationError
+
+    guard = getattr(request.app.state, "budget_guard", None)
+    if guard is None:
+        raise ServiceError(503, "AI_BUDGET_UNAVAILABLE", "AI budget is unavailable.")
+    try:
+        return guard.status()
+    except EvaluationError as exc:
+        raise ServiceError(503, exc.code, exc.safe_message) from None
 
 
 @router.post("/evaluations", status_code=202, response_model=responses.Evaluation)

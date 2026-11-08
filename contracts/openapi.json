@@ -979,6 +979,80 @@
         }
       }
     },
+    "/api/v1/submission-preflights": {
+      "post": {
+        "operationId": "preflightSubmission",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionPreflightResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmissionPreflightRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai-budget": {
+      "get": {
+        "operationId": "getAIBudget",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIBudget"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/evaluations/{id}/appeals": {
       "post": {
         "operationId": "createAppeal",
@@ -3330,12 +3404,91 @@
         ],
         "additionalProperties": false
       },
+      "SubmissionPreflightRequest": {
+        "type": "object",
+        "properties": {
+          "batch_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_conversation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "minItems": 1,
+            "maxItems": 1000,
+            "uniqueItems": true
+          },
+          "expected_total_records": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "batch_id",
+          "expected_conversation_ids",
+          "expected_total_records"
+        ],
+        "additionalProperties": false
+      },
+      "SubmissionPreflightResponse": {
+        "type": "object",
+        "properties": {
+          "expected_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "batch_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missing_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "extra_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "matches": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "expected_count",
+          "batch_count",
+          "missing_count",
+          "extra_count",
+          "matches"
+        ],
+        "additionalProperties": false
+      },
       "SubmissionExportRequest": {
         "type": "object",
         "properties": {
           "batch_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "expected_conversation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "minItems": 1,
+            "maxItems": 1000,
+            "uniqueItems": true
+          },
+          "expected_total_records": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
           },
           "team_name": {
             "type": "string",
@@ -3346,7 +3499,113 @@
         },
         "required": [
           "batch_id",
+          "expected_conversation_ids",
+          "expected_total_records",
           "team_name"
+        ],
+        "additionalProperties": false
+      },
+      "AIBudget": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "const": "USD"
+          },
+          "limit_usd": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,12})\\.[0-9]{6}$"
+          },
+          "committed_upper_usd": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,12})\\.[0-9]{6}$"
+          },
+          "reserved_usd": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,12})\\.[0-9]{6}$"
+          },
+          "available_usd": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,12})\\.[0-9]{6}$"
+          },
+          "next_request_upper_usd": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,12})\\.[0-9]{6}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_reservations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unknown_reservations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "service_tier": {
+            "const": "default"
+          },
+          "pricing_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accounting_started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "blocked_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "AI_BUDGET_DISABLED",
+                  "AI_BUDGET_EXCEEDED",
+                  "AI_BUDGET_POLICY_UNSUPPORTED",
+                  "AI_BUDGET_UNAVAILABLE",
+                  "AI_BUDGET_RESERVATION_CONFLICT",
+                  "AI_BUDGET_WAITING"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "currency",
+          "limit_usd",
+          "committed_upper_usd",
+          "reserved_usd",
+          "available_usd",
+          "next_request_upper_usd",
+          "active_reservations",
+          "unknown_reservations",
+          "model",
+          "service_tier",
+          "pricing_version",
+          "accounting_started_at",
+          "enabled",
+          "blocked_reason"
         ],
         "additionalProperties": false
       },

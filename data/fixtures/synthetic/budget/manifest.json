@@ -1,0 +1,22 @@
+{
+  "synthetic": true,
+  "description": "Собственные синтетические состояния общего денежного лимита; не расходы или invoice провайдера.",
+  "fixtures": [
+    {
+      "file": "disabled.json",
+      "schema": "AIBudget"
+    },
+    {
+      "file": "enabled.json",
+      "schema": "AIBudget"
+    },
+    {
+      "file": "waiting.json",
+      "schema": "AIBudget"
+    },
+    {
+      "file": "unknown-hold.json",
+      "schema": "AIBudget"
+    }
+  ]
+}

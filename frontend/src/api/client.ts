@@ -1,5 +1,6 @@
 import type {
   Appeal,
+  AiBudget,
   BatchCreate,
   ChecklistDetail,
   ChecklistSummary,
@@ -13,6 +14,8 @@ import type {
   ImportSummary,
   OrganizerRecord,
   Page,
+  SubmissionReference,
+  SubmissionPreflight,
 } from "./types";
 const messages: Record<string, string> = {
   AI_NOT_CONFIGURED:
@@ -70,7 +73,19 @@ const messages: Record<string, string> = {
     "В наборе повторяются внешние ID диалогов. Подготовьте набор одной группы без повторяющихся ID.",
   EVALUATION_REVIEW_REQUIRED: "Оценка требует ручной проверки.",
   EVALUATION_PENDING: "Оценка ещё не завершена.",
+  SUBMISSION_SCOPE_MISMATCH:
+    "Состав пакета не совпадает с независимым эталоном. Проверьте пропущенные и лишние диалоги перед экспортом.",
+  AI_BUDGET_DISABLED: "Новые AI-вызовы отключены: общий денежный лимит равен нулю.",
+  AI_BUDGET_EXCEEDED: "Общего бюджета недостаточно для следующего полного резерва.",
+  AI_BUDGET_POLICY_UNSUPPORTED: "Для выбранной модели не настроена поддерживаемая политика стоимости. Новые AI-вызовы заблокированы.",
+  AI_BUDGET_UNAVAILABLE: "Общий бюджет временно недоступен. Новые AI-вызовы заблокированы.",
+  AI_BUDGET_RESERVATION_CONFLICT: "Не удалось безопасно зарезервировать бюджет. Автоматического повтора вызова нет.",
+  AI_BUDGET_WAITING: "Доступный бюджет временно занят активными попытками. Обновите статус после их завершения.",
 };
+export const financialRefusal = (error: unknown) => error instanceof ApiError && [
+  "AI_BUDGET_DISABLED", "AI_BUDGET_EXCEEDED", "AI_BUDGET_POLICY_UNSUPPORTED",
+  "AI_BUDGET_UNAVAILABLE", "AI_BUDGET_RESERVATION_CONFLICT",
+].includes(error.code);
 export const safeCode = (code: unknown) =>
   typeof code === "string" && Object.hasOwn(messages, code)
     ? code
@@ -127,6 +142,7 @@ export async function request<T>(
 const post = <T>(path: string, body: unknown) =>
   request<T>(path, { method: "POST", body: JSON.stringify(body) });
 export const api = {
+  aiBudget: () => request<AiBudget>("/ai-budget"),
   conversations: (query: string) =>
     request<Page<Conversation>>(`/conversations?${query}`),
   conversation: (id: string, version?: string) =>
@@ -170,8 +186,10 @@ export const api = {
     post<EvaluationBatch>("/evaluation-batches", body),
   retryBatch: (id: string) =>
     post<EvaluationBatch>(`/evaluation-batches/${encodeURIComponent(id)}/retry-failed`, {}),
-  submissionExport: (batch_id: string, team_name: string) =>
-    post<unknown>("/submission-exports", { batch_id, team_name }),
+  submissionPreflight: (batch_id: string, reference: SubmissionReference) =>
+    post<SubmissionPreflight>("/submission-preflights", { batch_id, ...reference }),
+  submissionExport: (batch_id: string, team_name: string, reference: SubmissionReference) =>
+    post<unknown>("/submission-exports", { batch_id, team_name, ...reference }),
   appeals: (id: string, offset = 0) =>
     request<Page<Appeal>>(
       `/appeals?evaluation_id=${encodeURIComponent(id)}&limit=100&offset=${offset}`,

@@ -19,10 +19,145 @@ from app.services.worker import stop_evaluation_worker
 setup = evaluation_setup
 
 
-def export(client, batch_id, team_name="Synthetic team"):
+def reference(client, ids=None):
+    # This standalone synthetic reference spans all imported source records, not batch members.
+    if ids is None:
+        ids = sorted(
+            {
+                c["external_id"]
+                for c in client.get("/api/v1/conversations", params={"limit": 100}).json()["items"]
+            }
+        )
+    return {"expected_conversation_ids": ids, "expected_total_records": len(ids)}
+
+
+def export(client, batch_id, team_name="Synthetic team", expected_ids=None):
     return client.post(
-        "/api/v1/submission-exports", json={"batch_id": batch_id, "team_name": team_name}
+        "/api/v1/submission-exports",
+        json={
+            "batch_id": batch_id,
+            "team_name": team_name,
+            **reference(client, expected_ids),
+        },
     )
+
+
+@pytest.mark.parametrize(
+    ("count", "expected", "missing", "extra"),
+    [
+        (1, ["PRIVATE_REFERENCE_ONLY"], 1, 1),
+        (1, ["synthetic-evaluation", "PRIVATE_REFERENCE_ONLY"], 1, 0),
+        (2, ["synthetic-evaluation"], 0, 1),
+        (2, ["synthetic-evaluation", "synthetic-batch-0"], 0, 0),
+    ],
+)
+def test_independent_scope_preflight_and_export_gate(
+    setup, caplog, count, expected, missing, extra
+):
+    from sqlalchemy import text
+
+    client, factory, app, pipeline = setup
+    client.portal.call(stop_evaluation_worker, app)
+    payload = batch_payload(client, count)
+    batch = client.post("/api/v1/evaluation-batches", json=payload).json()
+    calls_before = len(pipeline.calls)
+    with factory() as db:
+        before = [
+            db.scalar(text(f"SELECT COUNT(*) FROM {table}"))
+            for table in ("evaluations", "evaluation_batches", "evaluation_batch_items")
+        ]
+    caplog.set_level("INFO", logger="cqa")
+    preflight = client.post(
+        "/api/v1/submission-preflights",
+        json={
+            "batch_id": batch["id"],
+            **reference(client, expected),
+        },
+    )
+    assert preflight.status_code == 200
+    matches = missing == extra == 0
+    assert preflight.json() == {
+        "expected_count": len(expected),
+        "batch_count": count,
+        "missing_count": missing,
+        "extra_count": extra,
+        "matches": matches,
+    }
+    result = export(client, batch["id"], expected_ids=expected)
+    if matches:
+        assert result.status_code == 200
+        assert len(result.json()["results"]) == count
+        assert all(row["error"] == "EVALUATION_PENDING" for row in result.json()["results"])
+    else:
+        assert result.status_code == 409
+        assert result.json()["error"]["code"] == "SUBMISSION_SCOPE_MISMATCH"
+        assert "PRIVATE_REFERENCE_ONLY" not in result.text + caplog.text
+        assert "event=submission_export_completed" not in caplog.text
+    with factory() as db:
+        after = [
+            db.scalar(text(f"SELECT COUNT(*) FROM {table}"))
+            for table in ("evaluations", "evaluation_batches", "evaluation_batch_items")
+        ]
+    assert after == before
+    assert len(pipeline.calls) == calls_before
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"expected_conversation_ids": []},
+        {"expected_conversation_ids": ["duplicate", " duplicate "], "expected_total_records": 2},
+        {"expected_conversation_ids": [1]},
+        {"expected_conversation_ids": [" "]},
+        {"expected_total_records": True},
+        {"expected_total_records": "1"},
+        {"expected_total_records": 0},
+        {"expected_total_records": 2},
+        {"expected_total_records": 1001},
+    ],
+)
+def test_invalid_reference_rejected_without_export(setup, patch):
+    client, _, app, _ = setup
+    client.portal.call(stop_evaluation_worker, app)
+    batch = client.post("/api/v1/evaluation-batches", json=batch_payload(client, 1)).json()
+    body = {"batch_id": batch["id"], **reference(client), **patch}
+    assert client.post("/api/v1/submission-preflights", json=body).status_code == 422
+    assert (
+        client.post(
+            "/api/v1/submission-exports",
+            json={
+                **body,
+                "team_name": "Synthetic team",
+            },
+        ).status_code
+        == 422
+    )
+
+
+def test_legacy_export_and_reference_normalization_are_explicit(setup):
+    client, _, app, _ = setup
+    client.portal.call(stop_evaluation_worker, app)
+    batch = client.post("/api/v1/evaluation-batches", json=batch_payload(client, 1)).json()
+    assert (
+        client.post(
+            "/api/v1/submission-exports",
+            json={
+                "batch_id": batch["id"],
+                "team_name": "Synthetic team",
+            },
+        ).status_code
+        == 422
+    )
+    assert export(client, batch["id"], expected_ids=[" synthetic-evaluation "]).status_code == 200
+    missing = client.post(
+        "/api/v1/submission-preflights",
+        json={
+            "batch_id": "71000000-0000-4000-8000-000000000999",
+            **reference(client),
+        },
+    )
+    assert missing.status_code == 404
+    assert export(client, batch["id"], expected_ids=["001"]).status_code == 409
 
 
 def test_submission_official_mapping_na_ranges_flags_original_and_no_new_ai(setup, caplog):
@@ -88,6 +223,7 @@ def test_submission_official_mapping_na_ranges_flags_original_and_no_new_ai(setu
         result.provenance.update(
             model_requested="synthetic-requested", model_reported="synthetic-actual"
         )
+        result.provenance["usage"]["request_count"] = 1
         return result
 
     pipeline.evaluate = richer_result
@@ -161,6 +297,7 @@ def test_submission_preserves_pending_failed_review_and_success_rows(setup, capl
         result = asyncio.run(pipeline.evaluate(transcript=transcript, checklist=checklist))
         result.review_required = requires_review
         result.provenance["model_requested"] = model
+        result.provenance["usage"]["request_count"] = 1
         with factory.begin() as db:
             evaluations.complete(db, item["evaluation_id"], result)
     calls_before = len(pipeline.calls)
@@ -270,6 +407,17 @@ def test_submission_rejects_duplicate_external_ids_from_distinct_groups(setup, c
     payload["conversation_ids"].extend(imported["conversation_ids"])
     batch = client.post("/api/v1/evaluation-batches", json=payload).json()
     caplog.set_level(logging.INFO, logger="cqa")
+    preflight = client.post(
+        "/api/v1/submission-preflights",
+        json={"batch_id": batch["id"], **reference(client)},
+    )
+    assert preflight.json() == {
+        "expected_count": 1,
+        "batch_count": 2,
+        "missing_count": 0,
+        "extra_count": 0,
+        "matches": False,
+    }
     response = export(client, batch["id"])
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "SUBMISSION_DUPLICATE_CONVERSATION_ID"
