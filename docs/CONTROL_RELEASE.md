@@ -18,7 +18,7 @@
   Фактическая стоимость неизвестна, estimated_cost_usd=null.
 - Официальный results/prod/results.json:10statusok,80критериев,
   исходные ID, обоснования и доказательства всех ролей с1, Decimal/N/A,
-  отдельный critical_flag. Четыре оценки имеют review_reasons; они не
+  отдельный critical_flag. Четыре оценки диалогов имеют review_reasons; они не
   заменены человеческими ответами и не скрыты как ошибки обработки.
 - Ground Truth организаторов неизвестен. Точность на PROD не измерена.
 
@@ -30,7 +30,7 @@ Swap:3 записи (RU/KZ/EN), сохранены в отдельной гру�
 
 Прогон использовал настоящий worker/SQLite/EvaluationPipeline/OpenAIProvider.
 Локальный HTTP-транспорт ограничивал число внешних POST до10, SDK и provider
-retries отключены. Все записи создавались только для FBroker. Исходные версии,
+retries отключены. Все запуски оценки создавались только для FBroker. Исходные версии,
 ProviderResult, evaluations и manifest сохранены приватно; оба dataset checksum
 после обработки неизменны. DEV-файл и прежние оценки не менялись.
 
@@ -42,6 +42,11 @@ runner на допустимое source=dataset; не production-код. Пре�
 Фактически выполнены:
 
 - CLI export и check:10records/10ok/0errors.
+- Read-only Chromium/HTTP:10FBrokercompleted и3Swapunassessed видны в работающем
+  приложении,8критериев,openai provenance безsyntheticbanner, переход к
+  доказательству PASS;pageerrors0,externalbrowserrequests0,consoleprivacyPASS.
+  Локальный просмотр на127.0.0.1:8040 использует явно пустой AI-ключ;
+  дополнительных AI-вызовов при проверке0.
 - 27 синтетических тестов экспорта, Ruff/format56, contracts check и diff check.
 - Синтетическая проверка budget transport: после лимита новые запросы
   отклоняются до сети, actual counter не растёт; внешних запросов в тесте0.
@@ -67,6 +72,16 @@ Intake: cqa.control_import/control_download_completed/swap_download_completed.
 Ошибка подготовки дала CONTROL_BATCH_FAILED и одну безопасную диагностику
 cqa.errors без URL, ключей, текста диалогов и исходного исключения.
 
-Независимое Q-01, точные base/head SHA, CI и фактическая публикация фиксируются
-в PR контрольной сдачи. До их завершения merge не выполняется. Архитектура,
+Независимый gpt-6.1-sol/xhigh одобрил base9e697b4/headcca74ad без findings:
+10/10source snapshots/versions/checklist и80/80actual model answers/rationale/
+evidence совпадают,25inclusive ranges и140non-operator context references
+проверены,10итогов независимо пересчитаны Decimal. SQLite integrity/FK,
+source/provenance/history,Swap0,attempts10/retry0/usage/privacy и52ссылки PASS.
+Reviewer не менял файлы и не вызывал OpenAI. Самостоятельную браузерную
+проверку он не повторял; выше приведён фактический read-only прогон интегратора.
+
+Оба CI codecca74ad завершились SUCCESS: push42454779547 иPR42454852832,
+включая Python3.12/3.13,frontend,fullapplication,container. Финальный status-only
+SHA повторно подтверждает тот же reviewer; точные base/head/итоговыйCI/merge —
+в PR№10. До завершения этих проверок merge не выполняется. Архитектура,
 API и prompt не менялись; миграции и зависимости прежние.
