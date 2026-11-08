@@ -21,7 +21,7 @@ Node 22 из README проверяется CI; локальные результ
 | Команда | Результат и граница |
 | --- | --- |
 | `cp .env.example .env`, `make setup UV=/tmp/dataton-bootstrap/bin/uv` | Установка в новой рабочей копии по двум lock-файлам; Python venv создан заново, npm ci без найденных уязвимостей. Локальные секреты не копировались. |
-| `make check UV=/tmp/dataton-bootstrap/bin/uv` | Ruff, форматирование, экспорты контрактов, 244 pytest (238 исходных + 5 аудита + 1 изоляции harness), 7 Vitest, TypeScript и Vite build — PASS. |
+| `make check UV=/tmp/dataton-bootstrap/bin/uv` | Ruff, форматирование, экспорты контрактов, 246 pytest (238 исходных + 5 аудита + 3 изоляции harness), 7 Vitest, TypeScript и Vite build — PASS. |
 | `npm --prefix frontend run test:e2e` | 32 Playwright — PASS; синтетические браузерные API-ответы. Это отдельная проверка интерфейса. |
 | `npm --prefix frontend run test:e2e:backend` | 1 комплексный Playwright — PASS; настоящий HTTP/backend/миграции/seed/SQLite/worker/EvaluationPipeline/OpenAIProvider/SDK, только HTTP-транспорт SDK синтетический. Четыре искусственных SDK-ответа, внешних браузерных запросов 0, pageerrors 0. |
 | `make smoke UV=/tmp/dataton-bootstrap/bin/uv` | PASS; собранный UI и настоящий сервер с новой БД; импорт/чтение и отказ без ключа; `upstream_requests=0`. |
@@ -71,7 +71,7 @@ Benchmark реализован и проверен синтетическими 
 Подтверждённых новых ошибок production-кода на текущем main не обнаружено.
 Q-01 выявил P2 в добавленном тестовом сервере: module-level app при импорте
 успевал читать `.env` до явных изолированных настроек. Перед импортом app.main
-теперь отключается env_file и удаляются алиасы настроек только в отдельном
+теперь отключается env_file и без учёта регистра удаляются алиасы настроек только в отдельном
 процессе harness. Subprocess-регрессия с запрещённым dotenv-reader и невалидными
 настройками воспроизвела отказ до исправления и проходит после него.
 Закрыт пробел проверки: редактирование критериев и апелляции теперь проходят

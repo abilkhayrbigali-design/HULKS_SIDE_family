@@ -10,7 +10,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_harness_import_never_reads_dotenv_or_inherits_application_settings(tmp_path):
+@pytest.mark.parametrize(
+    "alias_case", [str.upper, str.lower, str.title], ids=["upper", "lower", "mixed"]
+)
+def test_harness_import_never_reads_dotenv_or_inherits_application_settings(tmp_path, alias_case):
     trap = tmp_path / ".env"
     trap.write_text("CQA_EVALUATION_CONCURRENCY=synthetic-invalid-setting\n")
     script = """
@@ -23,16 +26,16 @@ with patch('pydantic_settings.sources.providers.dotenv.DotEnvSettingsSource._rea
            side_effect=AssertionError('DOTENV_READ_FORBIDDEN')):
     runpy.run_path(sys.argv[2], run_name='offline_acceptance_import_probe')
 assert Settings.model_config['env_file'] is None
-assert 'CQA_EVALUATION_CONCURRENCY' not in os.environ
-assert 'OPENAI_API_KEY' not in os.environ
+assert not any(name.casefold() in {'cqa_evaluation_concurrency', 'openai_api_key'}
+               for name in os.environ)
 """
     result = subprocess.run(
         [sys.executable, "-c", script, str(trap), str(ROOT / "tools/offline_acceptance_server.py")],
         cwd=ROOT / "backend",
         env={
             **os.environ,
-            "OPENAI_API_KEY": "synthetic-environment-must-be-ignored",
-            "CQA_EVALUATION_CONCURRENCY": "synthetic-invalid-setting",
+            alias_case("OPENAI_API_KEY"): "synthetic-environment-must-be-ignored",
+            alias_case("CQA_EVALUATION_CONCURRENCY"): "synthetic-invalid-setting",
         },
         capture_output=True,
         timeout=15,

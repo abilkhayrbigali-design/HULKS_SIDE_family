@@ -18,9 +18,12 @@ from app.config import Settings
 
 # app.main creates its module-level ASGI app during import. Isolate this standalone
 # test process BEFORE that import, including the otherwise implicit Settings().
-for field in Settings.model_fields.values():
-    if field.alias:
-        os.environ.pop(field.alias, None)
+setting_aliases = {
+    field.alias.casefold() for field in Settings.model_fields.values() if field.alias
+}
+for name in tuple(os.environ):
+    if name.casefold() in setting_aliases:
+        os.environ.pop(name, None)
 Settings.model_config["env_file"] = None
 
 from app.evaluation.pipeline import EvaluationPipeline
