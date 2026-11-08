@@ -131,8 +131,11 @@ CI проверяет Python 3.12/3.13, frontend и Playwright, полный л�
 
 [DEV results.json](results/dev/results.json) содержит все 65 исходных диалогов
 и 520 AI-оценок в официальном формате Appendix Results 1.0. Источники и границы
-проверки — в [results/README.md](results/README.md). Контрольный PROD10 пока не
-выдан организаторами; `results/prod/results.json` не подменяется DEV/holdout.
+проверки — в [results/README.md](results/README.md). Официальный
+[PROD FBroker results.json](results/prod/results.json) содержит10контрольных
+чатов/80оценок:10ok/0error, ровно10фактическихAPIпопыток без повторов.
+Дополнительный Swap3 сохранён приватно без оценки и не входит в PROD.
+Отчёт — [CONTROL_RELEASE.md](docs/CONTROL_RELEASE.md).
 
 Проверка опубликованного DEV против локального исходного набора:
 
@@ -166,7 +169,7 @@ CLI не вызывает модель и не меняет источники. 
 Для выданного PROD используйте `--kind prod`, его исходный JSON, его сохранённые
 оценки и путь `results/prod/results.json`; требуется ровно 10 записей, включая
 ошибки. В обоих случаях нужны исходные conversation_id, commit и push до
-стоп-кода. Получение/оценка ещё не выданного PROD этим экспортом не выполняется.
+стоп-кода. Offline-экспорт читает сохранённые ответы и не выполняет новые AI-вызовы.
 
 ## Логи для диагностики
 
