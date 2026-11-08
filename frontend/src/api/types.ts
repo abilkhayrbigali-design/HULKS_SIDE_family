@@ -156,6 +156,33 @@ export interface BatchCreate {
   conversation_ids: string[];
   checklist_version_id: string;
 }
+export interface SubmissionReference {
+  expected_conversation_ids: string[];
+  expected_total_records: number;
+}
+export interface SubmissionPreflight {
+  expected_count: number;
+  batch_count: number;
+  missing_count: number;
+  extra_count: number;
+  matches: boolean;
+}
+export interface AiBudget {
+  currency: "USD";
+  limit_usd: string;
+  committed_upper_usd: string;
+  reserved_usd: string;
+  available_usd: string;
+  next_request_upper_usd: string | null;
+  active_reservations: number;
+  unknown_reservations: number;
+  model: string;
+  service_tier: "default";
+  pricing_version: string | null;
+  accounting_started_at: string;
+  enabled: boolean;
+  blocked_reason: string | null;
+}
 export interface EvaluationBatch {
   id: string;
   request_id: string;

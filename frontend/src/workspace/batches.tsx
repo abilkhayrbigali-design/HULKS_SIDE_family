@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { api, ApiError, logFailure } from "../api/client";
+import { api, ApiError, logFailure, financialRefusal } from "../api/client";
 import type { BatchCreate, EvaluationBatch } from "../api/types";
 import { useWorkspace } from "./context";
+import { useBudget } from "./budget";
 
 const storageKey = "cqa.batch";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -61,6 +62,7 @@ export function BatchProvider({ children }: { children: ReactNode }) {
   const pending = useRef(false);
   const current = useRef<EvaluationBatch | null>(null);
   const workspace = useWorkspace();
+  const budget = useBudget();
   const refreshQueue = useRef(workspace.refreshQueue);
   refreshQueue.current = workspace.refreshQueue;
   const persist = (nextId: string | null, nextAttempt: BatchCreate | null) => {
@@ -74,7 +76,7 @@ export function BatchProvider({ children }: { children: ReactNode }) {
     const previous = current.current;
     if (previous?.id === value.id &&
         (previous.completed !== value.completed || previous.failed !== value.failed))
-      refreshQueue.current();
+      { refreshQueue.current(); void budget.refresh(); }
     current.current = value;
     setBatch(value);
   };
@@ -115,7 +117,7 @@ export function BatchProvider({ children }: { children: ReactNode }) {
   }, [id, reload]);
 
   const run = async (operation: () => Promise<EvaluationBatch>, request: BatchCreate | null) => {
-    if (pending.current) return;
+    if (pending.current || !budget.allowed) return;
     pending.current = true;
     setBusy(true);
     setError(undefined);
@@ -138,12 +140,17 @@ export function BatchProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       if (generation.current === token) {
         setError(e);
+        if (request && financialRefusal(e)) {
+          setAttempt(null);
+          persist(id, null);
+        }
         // A transport failure may have committed. Keep the exact request ID.
         setReload((v) => v + 1);
       }
     } finally {
       pending.current = false;
       setBusy(false);
+      void budget.refresh();
     }
   };
   return <Context.Provider value={{

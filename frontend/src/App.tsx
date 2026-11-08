@@ -37,6 +37,7 @@ import { ConversationView } from "./features/ConversationView";
 import { Checklists } from "./features/Checklists";
 import { Batches } from "./features/Batches";
 import { WorkspaceProvider, useWorkspace } from "./workspace/context";
+import { BudgetProvider, BudgetStatus } from "./workspace/budget";
 import { BatchProvider } from "./workspace/batches";
 import { Empty } from "./ui";
 function route() {
@@ -105,6 +106,7 @@ export function App() {
   return (
     <TooltipProvider delayDuration={350}>
       <WorkspaceProvider>
+        <BudgetProvider>
         <BatchProvider>
         <div className="app-shell">
           <a
@@ -127,6 +129,7 @@ export function App() {
               <span className="workspace-caption">Quality workspace</span>
             </div>
             <div className="header-actions">
+              <BudgetStatus />
               <span className="environment">
                 <ShieldCheck size={14} />
                 Контроль качества
@@ -215,6 +218,7 @@ export function App() {
           </main>
         </div>
         </BatchProvider>
+        </BudgetProvider>
       </WorkspaceProvider>
     </TooltipProvider>
   );

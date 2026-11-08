@@ -1,5 +1,13 @@
 import type { Page, Route } from "@playwright/test";
 import { readFileSync } from "node:fs";
+// Explicit synthetic status for browser tests; never a product fallback.
+export const syntheticBudget = () => ({
+  currency: "USD", limit_usd: "10.000000", committed_upper_usd: "0.000000",
+  reserved_usd: "0.000000", available_usd: "10.000000", next_request_upper_usd: "0.587400",
+  active_reservations: 0, unknown_reservations: 0, model: "gpt-6-luna", service_tier: "default",
+  pricing_version: "gpt-6-luna-standard-2026-11-08-v1", accounting_started_at: "2026-11-08T00:00:00Z",
+  enabled: true, blocked_reason: null as string | null,
+});
 export const fixture = (file: string) =>
   JSON.parse(
     readFileSync(
@@ -61,6 +69,7 @@ export async function mockAPI(
         { error: { code, message: "PRIVATE_SERVER_MARKER", details: [] } },
         status,
       );
+    if (path === "/ai-budget") return json(syntheticBudget());
     if (path === "/conversations" && req.method() === "GET") {
       const lang = url.searchParams.get("language");
       return json(
@@ -234,6 +243,7 @@ export async function mockWorkspaceAPI(page: Page) {
     requests.push(path + url.search);
     const send = (json: unknown, status = 200) =>
       route.fulfill({ json, status });
+    if (path === "/ai-budget") return send(syntheticBudget());
     if (request.method() !== "GET")
       return send(
         {
