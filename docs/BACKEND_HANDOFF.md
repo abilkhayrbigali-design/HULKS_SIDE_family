@@ -161,3 +161,9 @@ failure → первый cleanup SQL failure → duplicate/exceeded. Unknown с�
 отдельным commit, pending cleanup не отображается как active/WAITING.20 ledger
 tests PASS после финального overlay; combined510 backend PASS после recovery fix
 и N1ba8c4c (до последнего status-only overlay, отдельно покрытого20 tests).
+
+Независимый GPT-6.1 Sol/xhigh Q-01 закрыл оба подтверждённых P2 после исправления
+cleanup и A settings blank-model boundary. Reviewer выполнил80 targeted tests,
+две собственные регрессии и Ruff/format/diff; открытых findings нет. После A fix
+автор отдельно выполнил55 settings/ledger/runtime-contract tests PASS. Полный
+combined suite reviewer не повторял; финальная общая приёмка принадлежит A-21.
