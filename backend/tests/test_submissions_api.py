@@ -223,6 +223,7 @@ def test_submission_official_mapping_na_ranges_flags_original_and_no_new_ai(setu
         result.provenance.update(
             model_requested="synthetic-requested", model_reported="synthetic-actual"
         )
+        result.provenance["usage"]["request_count"] = 1
         return result
 
     pipeline.evaluate = richer_result
@@ -296,6 +297,7 @@ def test_submission_preserves_pending_failed_review_and_success_rows(setup, capl
         result = asyncio.run(pipeline.evaluate(transcript=transcript, checklist=checklist))
         result.review_required = requires_review
         result.provenance["model_requested"] = model
+        result.provenance["usage"]["request_count"] = 1
         with factory.begin() as db:
             evaluations.complete(db, item["evaluation_id"], result)
     calls_before = len(pipeline.calls)
@@ -405,6 +407,17 @@ def test_submission_rejects_duplicate_external_ids_from_distinct_groups(setup, c
     payload["conversation_ids"].extend(imported["conversation_ids"])
     batch = client.post("/api/v1/evaluation-batches", json=payload).json()
     caplog.set_level(logging.INFO, logger="cqa")
+    preflight = client.post(
+        "/api/v1/submission-preflights",
+        json={"batch_id": batch["id"], **reference(client)},
+    )
+    assert preflight.json() == {
+        "expected_count": 1,
+        "batch_count": 2,
+        "missing_count": 0,
+        "extra_count": 0,
+        "matches": False,
+    }
     response = export(client, batch["id"])
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "SUBMISSION_DUPLICATE_CONVERSATION_ID"

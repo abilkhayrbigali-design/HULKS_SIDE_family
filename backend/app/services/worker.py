@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from app.diagnostics import log_internal_error
+from app.evaluation.budget import evaluation_scope
 from app.services import evaluations
 
 logger = logging.getLogger("cqa.worker")
@@ -54,7 +55,10 @@ class EvaluationWorker:
                 id_, transcript, checklist = claimed
                 logger.info("event=evaluation_started status=running")
                 # The snapshot transaction has committed and its Session is closed.
-                result = await self.pipeline.evaluate(transcript=transcript, checklist=checklist)
+                with evaluation_scope(id_):
+                    result = await self.pipeline.evaluate(
+                        transcript=transcript, checklist=checklist
+                    )
                 provenance = result.provenance
                 with self.factory.begin() as db:
                     evaluations.complete(db, id_, result)
@@ -87,11 +91,18 @@ class EvaluationWorker:
 
 async def start_evaluation_worker(app):
     from app.evaluation.pipeline import EvaluationPipeline
+    from app.services.budget import SqlBudgetGuard
+
+    # One engine/account covers every future SDK attempt, independently of batches.
+    engine = app.state.session_factory.kw["bind"]
+    guard = SqlBudgetGuard(engine, app.state.settings)
+    guard.initialize()
+    app.state.budget_guard = guard
 
     pipeline = getattr(app.state, "evaluation_pipeline", None)
     app.state.evaluation_pipeline_injected = pipeline is not None
     if pipeline is None:
-        pipeline = EvaluationPipeline(app.state.settings)
+        pipeline = EvaluationPipeline(app.state.settings, budget_guard=guard)
     app.state.evaluation_pipeline = pipeline
     worker = EvaluationWorker(
         app.state.session_factory, pipeline, app.state.settings.evaluation_concurrency

@@ -160,7 +160,10 @@ def create(session, payload):
     results, models = [], set()
     invalid = 0
     for evaluation in evaluations:
-        if evaluation.provenance:
+        if (
+            evaluation.provenance
+            and evaluation.provenance.get("usage", {}).get("request_count", 0) > 0
+        ):
             models.add(
                 evaluation.provenance.get("model_reported")
                 or evaluation.provenance["model_requested"]

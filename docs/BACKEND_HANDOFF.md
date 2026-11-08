@@ -110,3 +110,44 @@ backend/tests`. Синтетический test pipeline явно именова
 
 Независимое ревью Q-01 текущего инкремента выполняется отдельно и передаётся
 интегратору с финальными base/head SHA; исторический DONE не заменяет его.
+
+## C-13/C-14: финальная полнота и lifetime budget (D-027)
+
+`SubmissionExportRequest` теперь требует независимые external IDs и strict total;
+Text выполняет только trim. `POST /submission-preflights` читает выбранный batch и
+возвращает только counts/matches без записи. Export повторяет exact normalized set
+проверку; duplicate external IDs из разных групп не дают matches=true. Это сверка
+заявленного source reference, не доказательство подлинности организаторского файла.
+Для failed/pending/review сохраняются error rows и весь retry scope. Имя модели
+попадает в export только при provenance.usage.request_count>0; иначе `not_run`.
+
+`app.services.budget.SqlBudgetGuard(engine, settings)` реализует N BudgetGuard.
+Startup в `start_evaluation_worker` вызывает initialize один раз: c004 global
+account получает абсолютный cap, прежние reserved становятся unknown. Committed,
+holds и accounting_started_at никогда не сбрасываются изменением cap. SQL-суммы —
+integer microUSD; все сравнения/сложения выполняются Python int под BEGIN IMMEDIATE.
+Frozen quote и unique(evaluation_id,attempt) не позволяют переиспользовать permission.
+Terminal settled/unknown и accounting boundary защищены SQLite triggers.
+
+Reserve использует FIFO asyncio.Lock только для выдачи permissions; settle/status
+его не берут. Если активная попытка способна освободить достаточно резерва, guard
+ожидает bounded poll0.05 с закрытой транзакцией/connection. Unknown не считается
+освобождаемым. Известная проверенная usage освобождает разницу; частичная/неизвестная
+сохраняет full hold навсегда. Ошибка после durable reserve переводит orphan в unknown;
+если cleanup временно недоступен, следующий reserve сначала повторяет cleanup.
+Реестр — conservative upper estimate, не invoice. Один engine/account покрывает
+single/batch/retry. Режим продукта с обходом guard не добавлен.
+
+Worker устанавливает `evaluation_scope(id)` вокруг прежнего evaluate API. Owned
+EvaluationPipeline получает budget_guard; injected synthetic Python pipeline
+остается только тестовой зависимостью и не делает SDK-вызовов. `GET /ai-budget`
+использует одну read snapshot и не создаёт account/reservation: при сбое безопасный503.
+Default cap0 блокирует все настоящие SDK attempts, не меняя чтение/импорт/экспорт.
+
+Проверено offline: combined505 backend tests; из них18 новых ledger tests и26
+submission tests. Включены two-guard race, FIFO/closed-tx wait,6jobs/concurrency2,
+single/batch/retry conservation/reuse, zero/policy refusal без MockTransport вызова,
+cancelled MockTransport full hold, paid-invalid→retry→cancel known charge, restart/
+cap/no replay, SQL rollback, commit callback, int64 и отсутствие private markers.
+Dependencies: N966ab2b/3e4edc0 и A6d748c7/6e3068e; source PR6 fdf07bc.
+Q-01 независимого final SHA выполняется отдельно; реальная точность не измерена.
