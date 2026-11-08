@@ -48,6 +48,22 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | A-19 | P0 | Абулхаир / родительский интегратор | Согласовать batch/submission контракт, интегрировать C-11/C-12/N-08/R-10 и провести offline API/UI/SQLite проверки с независимым Q-01 на финальный SHA | C-11, C-12, N-08, R-10; D-023 | DONE | Реализация и315pytest/12Vitest/41E2E/TS/build/Ruff/exports/smoke PASS. ActualHTTP/SQLite/worker→retry→full export/reload/narrow PASS; synthetic provider, external browser0, console0. Reviewer Sol/xhigh подтвердил d062d82 включая favicon/docs и факты actual QA. Последняя status-only дельта подтверждается тем же reviewer; точные final base/head и CI фиксируются в PR, main не сливается |
 
+### Финальная техническая приёмка — 2026-11-08
+
+Основа PR №6 fdf07bc; новый контракт D-027 / FINAL_READINESS_CONTRACT.md.
+В main не сливать без отдельной команды. Новые live-запросы не разрешены.
+
+| ID | Приоритет | Ответственный | Задача и готовность | Статус | Проверка |
+| --- | --- | --- | --- | --- | --- |
+| A-20 | P0 | Абулхаир | Settings/default0/pricing version и canonical API/fixtures/export с boundary tests | IN_PROGRESS | Wire согласован D-027; реализация проверяется отдельно |
+| A-21 | P0 | Root | Интеграция полноты/бюджета, HTTP/SQLite/worker QA, check/build/smoke/Playwright и Q-01 finalSHA | IN_PROGRESS | PR №6 сохранён; отдельная чистая ветка от fdf07bc |
+| C-13 | P0 | Чингиз | Независимый expected-ID reference, preflight и exact-set gate официального export | IN_PROGRESS | Пока код gap подтверждён; нужны регрессии и интеграция |
+| C-14 | P0 | Чингиз | Persistent global ledger, атомарные reserve/settle/unknown/restart и read-only status | IN_PROGRESS | Контракт D-027, без реальных расходов |
+| N-09 | P0 | Нурсултан | SQL-free policy/guard, per-attempt provider accounting и fail-closed/no replay | IN_PROGRESS | Official model/pricing fetched; synthetic tests обязательны |
+| N-10 | P0 | Нурсултан | Bounded offline rubric audit без подгонки holdout и фиктивной accuracy | IN_PROGRESS | Доказуемые gaps проверяются; без GT случайное tuning не проводится |
+| R-11 | P0 | Артём | Independent reference upload/preflight/strict download states и stale guards | IN_PROGRESS | Existing41E2E/12Vitest/TS baseline PASS; реализация после D-027 |
+| R-12 | P0 | Артём | Global budget status/financial guards single+batch+retry и error/loading/narrow UX | IN_PROGRESS | Контракт D-027, без UI денег/ключей |
+
 ## 2. Участники, ветки и владение файлами
 
 Распределение предложено для начала работы. Если команда меняет роли, нужно одновременно исправить этот раздел, `README.md` и `AGENT_TASKS.md`.
@@ -79,7 +95,7 @@
 
 | ID | Приоритет | Ответственный | Задача и критерий готовности | Зависимости | Статус | Результат/проверка |
 | --- | --- | --- | --- | --- | --- | --- |
-| Q-01 | P0 | Автор PR; интегратор проверяет результат | Для каждого PR создать отдельного reviewer gpt-6.1-sol/xhigh по CODE_REVIEW.md. Исправить подтверждённые дефекты, пройти относящиеся проверки и получить отчёт на финальные base/head SHA. Применяется ко всем участникам, включая документационные PR | Изменения, вошедшие в конкретный PR; D-012 | DONE | A-19: отдельный gpt-6.1-sol/xhigh reviewer подтвердил code0ab921e и favicon/docs d062d82 без открытых findings; самостоятельно97pytest/9batchE2E/Ruff/exports/diff PASS. Root315pytest/12Vitest/41E2E/build/smoke/actualHTTP PASS. Этот status-only SHA проверяется отдельно тем же reviewer; финальные base/head и отчёт публикуются в PR. Main требует отдельной команды пользователя; прежние PR1/2/3 сохранены в журнале |
+| Q-01 | P0 | Автор PR; интегратор проверяет результат | Для каждого PR создать отдельного reviewer gpt-6.1-sol/xhigh по CODE_REVIEW.md. Исправить подтверждённые дефекты, пройти относящиеся проверки и получить отчёт на финальные base/head SHA. Применяется ко всем участникам, включая документационные PR | Изменения, вошедшие в конкретный PR; D-012 | IN_PROGRESS | PR №6 fdf07bc имеет собственный APPROVE/CI. Для нового A-21 нужен отдельный review и finalbase/head; прежний отчёт не заменяет проверку новых финансовых/coverage изменений |
 
 ### Абулхаир — интеграция и выпуск
 
