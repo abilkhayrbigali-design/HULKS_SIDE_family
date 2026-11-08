@@ -40,16 +40,27 @@ def _write(engine):
             raise
 
 
-def _read(connection):
+def _read(connection, abandoned=frozenset()):
     account = connection.execute(select(ACCOUNT).where(ACCOUNT.c.id == "global")).mappings().one()
     amounts = [account[key] for key in ("limit_micros", "committed_micros", "reserved_micros")]
     if any(type(value) is not int or not 0 <= value <= MAX_MICROUSD for value in amounts):
         raise RuntimeError("Invalid budget account")
     rows = connection.execute(
-        select(RESERVATION.c.state, RESERVATION.c.reserved_micros, RESERVATION.c.charged_micros)
+        select(
+            RESERVATION.c.id,
+            RESERVATION.c.state,
+            RESERVATION.c.reserved_micros,
+            RESERVATION.c.charged_micros,
+        )
     ).all()
-    active = sum(row.reserved_micros for row in rows if row.state == "reserved")
-    unknown = sum(row.reserved_micros for row in rows if row.state == "unknown")
+    active_rows = [row for row in rows if row.state == "reserved" and row.id not in abandoned]
+    unknown_rows = [
+        row
+        for row in rows
+        if row.state == "unknown" or row.state == "reserved" and row.id in abandoned
+    ]
+    active = sum(row.reserved_micros for row in active_rows)
+    unknown = sum(row.reserved_micros for row in unknown_rows)
     committed = sum(row.charged_micros for row in rows if row.state == "settled")
     # All arithmetic is Python integer arithmetic, never an overflowing SQL SUM/addition.
     if (
@@ -58,13 +69,7 @@ def _read(connection):
         or committed + active + unknown > MAX_MICROUSD
     ):
         raise RuntimeError("Inconsistent budget account")
-    return (
-        account,
-        active,
-        unknown,
-        sum(r.state == "reserved" for r in rows),
-        sum(r.state == "unknown" for r in rows),
-    )
+    return account, active, unknown, len(active_rows), len(unknown_rows)
 
 
 class SqlBudgetGuard:
@@ -118,29 +123,29 @@ class SqlBudgetGuard:
         # that abandoned hold advertised as an active request which can soon refund.
         self._abandoned.add(reservation_id)
         try:
-            with _write(self.engine) as connection:
-                connection.execute(
-                    update(RESERVATION)
-                    .where(RESERVATION.c.id == reservation_id, RESERVATION.c.state == "reserved")
-                    .values(state="unknown", settled_at=now())
-                )
-            self._abandoned.discard(reservation_id)
+            self._repair_abandoned()
         except Exception:
             # No second diagnostic; the original failure is handled at its boundary.
             # On restart initialize() again conservatively marks any surviving hold.
             pass
 
+    def _repair_abandoned(self):
+        abandoned = tuple(self._abandoned)
+        if not abandoned:
+            return
+        # Separate commit: a later duplicate/exceeded denial must not roll back
+        # recovery and advertise a dead permission as an active refundable call.
+        with _write(self.engine) as connection:
+            connection.execute(
+                update(RESERVATION)
+                .where(RESERVATION.c.id.in_(abandoned), RESERVATION.c.state == "reserved")
+                .values(state="unknown", settled_at=now())
+            )
+        self._abandoned.difference_update(abandoned)
+
     def _reserve_once(self, context, attempt, quote, reservation_id):
         amount = usd_to_micros(quote.reserved_usd)
         with _write(self.engine) as connection:
-            # Retry failed conservative cleanup before permitting any later request.
-            abandoned = tuple(self._abandoned)
-            if abandoned:
-                connection.execute(
-                    update(RESERVATION)
-                    .where(RESERVATION.c.id.in_(abandoned), RESERVATION.c.state == "reserved")
-                    .values(state="unknown", settled_at=now())
-                )
             duplicate = connection.execute(
                 select(RESERVATION.c.id).where(
                     RESERVATION.c.evaluation_id == context.evaluation_id,
@@ -189,6 +194,7 @@ class SqlBudgetGuard:
         async with self._reserve_lock:
             while True:
                 try:
+                    self._repair_abandoned()
                     if self._reserve_once(context, attempt, quote, reservation_id):
                         logger.info("event=ai_budget_reserved records=1")
                         return reservation_id
@@ -253,7 +259,11 @@ class SqlBudgetGuard:
                 # sqlite3 legacy transaction mode does not BEGIN on SELECT itself.
                 # Account and reservation aggregates must come from one read snapshot.
                 connection.exec_driver_sql("BEGIN")
-                account, active, unknown, active_count, unknown_count = _read(connection)
+                # Failed cleanup is already known to be abandoned locally. Show
+                # it as unknown without repairing or promising a future refund.
+                account, active, unknown, active_count, unknown_count = _read(
+                    connection, frozenset(self._abandoned)
+                )
             available = max(
                 0,
                 account["limit_micros"] - account["committed_micros"] - account["reserved_micros"],
@@ -270,6 +280,8 @@ class SqlBudgetGuard:
                     "committed_micros"
                 ] - unknown >= usd_to_micros(quote.reserved_usd)
                 reason = "AI_BUDGET_WAITING" if can_wait else "AI_BUDGET_EXCEEDED"
+            if self._abandoned:
+                reason = "AI_BUDGET_UNAVAILABLE"
             return {
                 "currency": "USD",
                 "limit_usd": str(micros_to_usd(account["limit_micros"])),

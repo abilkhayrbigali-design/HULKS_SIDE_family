@@ -135,6 +135,10 @@ Reserve использует FIFO asyncio.Lock только для выдачи 
 освобождаемым. Известная проверенная usage освобождает разницу; частичная/неизвестная
 сохраняет full hold навсегда. Ошибка после durable reserve переводит orphan в unknown;
 если cleanup временно недоступен, следующий reserve сначала повторяет cleanup.
+Этот cleanup коммитится в отдельной короткой транзакции до любых новых отказов:
+duplicate/exceeded не может откатить unknown recovery. Пока запись недоступна,
+read-only status учитывает локально известный orphan как unknown и выдаёт
+AI_BUDGET_UNAVAILABLE, не обещая временное освобождение. GET не ремонтирует БД.
 Реестр — conservative upper estimate, не invoice. Один engine/account покрывает
 single/batch/retry. Режим продукта с обходом guard не добавлен.
 
@@ -151,3 +155,9 @@ cancelled MockTransport full hold, paid-invalid→retry→cancel known charge, r
 cap/no replay, SQL rollback, commit callback, int64 и отсутствие private markers.
 Dependencies: N966ab2b/3e4edc0 и A6d748c7/6e3068e; source PR6 fdf07bc.
 Q-01 независимого final SHA выполняется отдельно; реальная точность не измерена.
+
+После Q-01 finding о rollback recovery добавлены две регрессии: durable callback
+failure → первый cleanup SQL failure → duplicate/exceeded. Unknown сохраняется
+отдельным commit, pending cleanup не отображается как active/WAITING.20 ledger
+tests PASS после финального overlay; combined510 backend PASS после recovery fix
+и N1ba8c4c (до последнего status-only overlay, отдельно покрытого20 tests).

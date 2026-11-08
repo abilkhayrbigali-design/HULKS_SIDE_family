@@ -243,6 +243,51 @@ def test_durable_commit_then_callback_error_becomes_unknown(setup, monkeypatch, 
     assert "AI_BUDGET_UNAVAILABLE" in caplog.text
 
 
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_retry_unknown_cleanup_commits_before_later_budget_denial(setup, monkeypatch, duplicate):
+    first, second = contexts(setup, 2)
+    guard = guard_for(setup)
+    original = guard._reserve_once
+
+    def fail_after_commit(*args):
+        assert original(*args)
+        raise RuntimeError("PRIVATE_DURABLE_CALLBACK")
+
+    failed_cleanup = []
+
+    def fail_once(connection, cursor, statement, parameters, context, executemany):
+        if statement.startswith("UPDATE ai_budget_reservations") and not failed_cleanup:
+            failed_cleanup.append(1)
+            raise OperationalError("PRIVATE_TEMPORARY_DB", {}, RuntimeError("PRIVATE_TEMPORARY_DB"))
+
+    monkeypatch.setattr(guard, "_reserve_once", fail_after_commit)
+    event.listen(guard.engine, "before_cursor_execute", fail_once)
+    try:
+        with pytest.raises(EvaluationError) as exc:
+            asyncio.run(guard.reserve(context=first, attempt=1, quote=quote(guard)))
+        assert exc.value.code == "AI_BUDGET_UNAVAILABLE"
+    finally:
+        event.remove(guard.engine, "before_cursor_execute", fail_once)
+    # GET never attempts a write/repair and cannot advertise this as refundable.
+    assert guard.status()["blocked_reason"] == "AI_BUDGET_UNAVAILABLE"
+    assert guard.status()["active_reservations"] == 0
+    assert guard.status()["unknown_reservations"] == 1
+    monkeypatch.setattr(guard, "_reserve_once", original)
+    with pytest.raises(EvaluationError) as exc:
+        asyncio.run(
+            guard.reserve(context=first if duplicate else second, attempt=1, quote=quote(guard))
+        )
+    assert exc.value.code == (
+        "AI_BUDGET_RESERVATION_CONFLICT" if duplicate else "AI_BUDGET_EXCEEDED"
+    )
+    status = guard.status()
+    assert status["active_reservations"] == 0
+    assert status["unknown_reservations"] == 1
+    assert status["reserved_usd"] == "0.587400"
+    assert status["blocked_reason"] == "AI_BUDGET_EXCEEDED"
+    assert not guard._abandoned
+
+
 def test_reservation_insert_and_balance_rollback_together(setup, caplog):
     context = contexts(setup, 1)[0]
     guard = guard_for(setup)
