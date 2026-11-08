@@ -127,6 +127,47 @@ offline-репетиции. Видимость репозитория меняе
 
 CI проверяет Python 3.12/3.13, frontend и Playwright, полный локальный smoke и сборку/health контейнера. Наличие workflow не означает пройденный запуск: смотрите результат CI конкретного коммита. Серверные контрактные тесты сравнивают реальные ответы с общими JSON Schema; успешный JSON не является оценкой качества модели.
 
+## Результаты для сдачи
+
+[DEV results.json](results/dev/results.json) содержит все 65 исходных диалогов
+и 520 AI-оценок в официальном формате Appendix Results 1.0. Источники и границы
+проверки — в [results/README.md](results/README.md). Контрольный PROD10 пока не
+выдан организаторами; `results/prod/results.json` не подменяется DEV/holdout.
+
+Проверка опубликованного DEV против локального исходного набора:
+
+```bash
+uv run --project backend --locked python tools/export_submission.py \
+  --kind dev --dataset data/private/dev-dataset.json \
+  --check results/dev/results.json
+```
+
+Для повторного offline-экспорта подставьте каталоги **выбранных сохранённых v1**
+прогонов. В каждом должны лежать `labels.frozen.json` со снимками и
+`predictions.json`. Из файла разметки читаются только case_id/transcript/checklist;
+человеческие ответы и примечания не используются:
+
+```bash
+uv run --project backend --locked python tools/export_submission.py \
+  --kind dev --dataset data/private/dev-dataset.json \
+  --run-directory data/private/tune-v1 \
+  --run-directory data/private/holdout-v1 \
+  --team-name 'HULK’S FAMILY' --output results/dev/results.json
+```
+
+Каталоги `tune-v1`/`holdout-v1` в примере — локальные источники, не файлы Git.
+CLI не вызывает модель и не меняет источники. Она проверяет полный транскрипт,
+версии, исходный чек-лист, ID/типы/шкалы/N/A, доказательства и пересчитанный итог.
+Выводит только безопасные счётчики; ошибка возвращает exit 2, предыдущий файл
+сохраняется. Отсутствующий или неуспешный ответ указан как `status=error`,
+`criteria=[]`, `score=null`, без выдуманной оценки. Неизвестная модель и
+повреждённые/несовместимые источники не экспортируются.
+
+Для выданного PROD используйте `--kind prod`, его исходный JSON, его сохранённые
+оценки и путь `results/prod/results.json`; требуется ровно 10 записей, включая
+ошибки. В обоих случаях нужны исходные conversation_id, commit и push до
+стоп-кода. Получение/оценка ещё не выданного PROD этим экспортом не выполняется.
+
 ## Логи для диагностики
 
 Журнал приложения выводится в терминал. Для локального сохранения:

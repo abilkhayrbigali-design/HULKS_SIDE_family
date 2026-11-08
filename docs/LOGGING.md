@@ -58,6 +58,15 @@ logger.info(
 
 ## Что добавляет каждый участник
 
+Offline-экспорт D-024 использует `cqa.submission`:
+`submission_export_started` (INFO), `submission_export_completed` (INFO,
+только records/errors), `submission_export_failed` (ERROR, фиксированный код).
+CLI не выводит пути, ID, содержимое JSON, validation errors и исходные исключения.
+В stdout — только status/records/ok/errors. Непредвиденный сбой проходит один раз
+через `log_internal_error("SUBMISSION_INTERNAL_ERROR", exc)` и безопасное
+завершение CLI; предыдущий файл сохраняется. Синтетические сценарии отказа
+проверяют ERROR/код и отсутствие приватных маркеров/URL/путей в caplog/stdout.
+
 | Участник | События в своей реализации | Особые ограничения |
 | --- | --- | --- |
 | Абулхаир | Готовность/остановка сервера, health/БД, общая обработка ошибок, диагностика запуска и CI | Сохраняет общую конфигурацию, безопасные HTTP-сводки и видимость ERROR; не печатает окружение/секреты в CI |
