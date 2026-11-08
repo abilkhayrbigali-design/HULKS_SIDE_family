@@ -9,12 +9,19 @@ Offline-сценарий работоспособен. **Сдача пока и�
 Изменения подготовлены отдельно в `codex/abulkhair-submission-audit`.
 Точный итоговый head и заключение Q-01 фиксируются в PR/передаче после коммита;
 этот документ сам по себе не подтверждает прохождение ревью нового SHA.
+[Draft PR №8](https://github.com/abilkhayrbigali-design/HULKS_SIDE_family/pull/8)
+содержит окончательные SHA и результаты. Отдельный gpt-6.1-sol/xhigh проверил
+code9a235bf после исправления P2, независимо повторил 246pytest, backend E2E
+и Ruff/format; подтверждённых открытых дефектов нет. Финальная правка содержит
+только статусы/документацию и также передаётся этому reviewer.
 Основная копия и ветки участников сохранены, защищённый пример не изменялся.
 
 ## Фактически выполненные проверки
 
 Среда: Python 3.13.18, uv 0.13.7, Node 26.8.2, npm 11.19.1, системный Chromium.
-Node 22 из README проверяется CI; локальные результаты ниже получены на Node 26.
+Локальные результаты ниже получены на Node 26. CI code9a235bf подтвердил
+Node 22 check/build, backend Python 3.12/3.13 и container build/health; полный
+статус всех jobs окончательного head сверяется отдельно в PR.
 В этой оболочке uv отсутствует в PATH, поэтому использовался уже установленный
 `/tmp/dataton-bootstrap/bin/uv` через переменную Make `UV`.
 
@@ -25,7 +32,7 @@ Node 22 из README проверяется CI; локальные результ
 | `npm --prefix frontend run test:e2e` | 32 Playwright — PASS; синтетические браузерные API-ответы. Это отдельная проверка интерфейса. |
 | `npm --prefix frontend run test:e2e:backend` | 1 комплексный Playwright — PASS; настоящий HTTP/backend/миграции/seed/SQLite/worker/EvaluationPipeline/OpenAIProvider/SDK, только HTTP-транспорт SDK синтетический. Четыре искусственных SDK-ответа, внешних браузерных запросов 0, pageerrors 0. |
 | `make smoke UV=/tmp/dataton-bootstrap/bin/uv` | PASS; собранный UI и настоящий сервер с новой БД; импорт/чтение и отказ без ключа; `upstream_requests=0`. |
-| `docker compose config --quiet` | PASS; контейнер не запускался — `docker info` отказал в доступе к Docker socket. Сборка/health контейнера остаются проверкой CI. |
+| `docker compose config --quiet` | PASS; контейнер не запускался — `docker info` отказал в доступе к Docker socket. Сборка/health контейнера успешно выполнены в CI code9a235bf, локальный Docker не заявляется проверенным. |
 | `uv run --project backend --locked pytest backend/tests/test_public_readiness.py -q` | 5 PASS, включая удалённую из текущего дерева подпись в синтетической Git-истории, redaction и ignore gaps. |
 | `gh api repos/abilkhayrbigali-design/HULKS_SIDE_family` с выбором только visibility/private/default_branch | Подтверждено `private`; без авторизации страница недоступна. Настройки GitHub не изменялись. |
 
@@ -127,7 +134,7 @@ URL_PARSE_REVIEW в тестах загрузки .env/невалидных audi
 решение по истории; удаление только из HEAD недостаточно. Самостоятельно
 переписывать историю или менять private на public в этой задаче нельзя.
 
-## Оставшиеся условия сдачи
+## Условия сдачи и проверки выпуска
 
 - Явное разрешение владельца на public, затем изменение видимости и проверка
   анонимного clone/доступа к итоговому SHA. Сейчас жюри не получает открытый repo.
@@ -136,7 +143,8 @@ URL_PARSE_REVIEW в тестах загрузки .env/невалидных audi
   Стоимость при неизвестном тарифе остаётся null, а не нулём.
 - Человеческий RU/KZ/EN tune/holdout и benchmark по [BENCHMARK.md](BENCHMARK.md).
   До этого точность не измерена; синтетические ответы не Ground Truth.
-- Q-01 отдельного gpt-6.1-sol/xhigh на итоговых base/head SHA и фактический CI
-  этого head, включая Node 22 и контейнер. Автоматического merge нет.
+- Перед merge сверить окончательное заключение Q-01 и CI именно head PR №8.
+  Code9a235bf уже одобрен отдельным gpt-6.1-sol/xhigh; окончательные SHA и
+  результат CI записываются вне коммита в PR. Автоматического merge нет.
 - [Пятиминутный сценарий](DEMO.md) подготовлен; автоматический сценарий выполнен.
   Человеческая репетиция с секундомером и live-защита ещё не проводились (A-05).
