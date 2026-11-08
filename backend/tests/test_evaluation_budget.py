@@ -20,6 +20,7 @@ from app.evaluation.budget import (
     validate_quote,
 )
 from app.evaluation.errors import EvaluationError
+from app.evaluation.schemas import Usage
 
 
 def quote(**changes):
@@ -134,6 +135,25 @@ def test_partial_unknown_or_inconsistent_usage_never_releases_reservation(change
 
 def test_no_usage_retains_full_reservation():
     assert conservative_settlement(quote(), None) is None
+
+
+def test_mutated_or_constructed_usage_is_revalidated_before_refund():
+    invalid = usage(output_tokens=-20, reasoning_output_tokens=-25, total_tokens=80)
+    for value in [Usage.model_construct(**invalid), Usage(**usage()).model_copy(update=invalid)]:
+        assert conservative_settlement(quote(), value) is None
+    mutated = Usage(**usage())
+    mutated.output_tokens, mutated.reasoning_output_tokens, mutated.total_tokens = -20, -25, 80
+    assert conservative_settlement(quote(), mutated) is None
+
+
+@pytest.mark.parametrize("value", [-1, True, "SYNTHETIC_PRIVATE_USAGE_VALUE", None])
+def test_damaged_usage_does_not_emit_values_or_serializer_warnings(value, recwarn, caplog, capsys):
+    damaged = Usage.model_construct(**usage(input_tokens=value))
+    assert conservative_settlement(quote(), damaged) is None
+    assert not recwarn
+    output = capsys.readouterr()
+    assert output.out == output.err == ""
+    assert "SYNTHETIC_PRIVATE_USAGE_VALUE" not in caplog.text
 
 
 def test_money_ceil_and_int64_limits():

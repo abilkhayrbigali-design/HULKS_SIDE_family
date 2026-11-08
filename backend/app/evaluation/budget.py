@@ -139,6 +139,11 @@ def conservative_settlement(quote: BudgetQuote, usage: Usage | dict | None) -> D
     """
     try:
         validate_quote(quote)
+        # Pydantic normally trusts existing mutable instances; revalidate their
+        # actual fields, including model_construct/model_copy or later mutation.
+        # A field dict avoids serializer warnings containing damaged/private values.
+        if isinstance(usage, Usage):
+            usage = {field: getattr(usage, field, None) for field in Usage.model_fields}
         usage = Usage.model_validate(usage)
     except (EvaluationError, ValidationError):
         return None

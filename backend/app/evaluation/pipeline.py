@@ -7,6 +7,7 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from app.config import Settings
+from app.evaluation.budget import BudgetGuard
 from app.evaluation.errors import EvaluationError
 from app.evaluation.schemas import ChecklistSnapshot, ProviderResult, TranscriptSnapshot
 from app.evaluation.scoring import calculate_assessment
@@ -44,9 +45,16 @@ def build_provenance(result: ProviderResult, prompt_version: str = PROMPT_VERSIO
 
 
 class EvaluationPipeline:
-    def __init__(self, settings: Settings, provider: EvaluationProvider | None = None):
+    def __init__(
+        self,
+        settings: Settings,
+        provider: EvaluationProvider | None = None,
+        *,
+        budget_guard: BudgetGuard | None = None,
+    ):
         self.settings = settings
         self.provider = provider
+        self.budget_guard = budget_guard
 
     async def evaluate(self, *, transcript, checklist) -> PipelineResult:
         try:
@@ -57,7 +65,7 @@ class EvaluationPipeline:
         if self.provider is None:
             from app.evaluation.provider import OpenAIProvider
 
-            self.provider = OpenAIProvider(self.settings)
+            self.provider = OpenAIProvider(self.settings, budget_guard=self.budget_guard)
         result = await self.provider.evaluate(transcript, checklist, PROMPT_VERSION)
         try:
             result = ProviderResult.model_validate(result)
